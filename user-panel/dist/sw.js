@@ -70,8 +70,8 @@ self.addEventListener('fetch', (event) => {
         if (request.headers.get('accept')?.includes('text/html')) {
           return fetch(request)
             .then((networkResponse) => {
-              // Cache successful responses
-              if (networkResponse.ok) {
+              // Cache successful responses (but not partial responses - 206)
+              if (networkResponse.ok && networkResponse.status !== 206) {
                 const responseClone = networkResponse.clone()
                 caches.open(RUNTIME_CACHE).then((cache) => {
                   cache.put(request, responseClone)
@@ -99,12 +99,12 @@ self.addEventListener('fetch', (event) => {
         // If not in cache, fetch from network
         return fetch(request)
           .then((networkResponse) => {
-            // Don't cache non-successful responses
-            if (!networkResponse.ok) {
+            // Don't cache non-successful responses or partial responses (206)
+            if (!networkResponse.ok || networkResponse.status === 206) {
               return networkResponse
             }
 
-            // Cache the response
+            // Cache the response (only full responses, not partial)
             const responseClone = networkResponse.clone()
             caches.open(RUNTIME_CACHE).then((cache) => {
               cache.put(request, responseClone)
