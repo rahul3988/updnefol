@@ -99,6 +99,10 @@ app.use('/uploads', (req, res, next) => {
     next();
 }, express_1.default.static('uploads'));
 // Serve user panel images with CORS headers
+// In production, images are in dist/IMAGES, in development they're in public/IMAGES
+const userPanelDistImages = path_1.default.join(__dirname, '../../user-panel/dist/IMAGES');
+const userPanelPublicImages = path_1.default.join(__dirname, '../../user-panel/public/IMAGES');
+const imagesPath = fs_1.default.existsSync(userPanelDistImages) ? userPanelDistImages : userPanelPublicImages;
 app.use('/IMAGES', (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -107,10 +111,10 @@ app.use('/IMAGES', (req, res, next) => {
         return res.sendStatus(200);
     }
     next();
-}, express_1.default.static(path_1.default.join(__dirname, '../../user-panel/public/IMAGES')));
+}, express_1.default.static(imagesPath));
 // Debug: Log the path being used
-console.log('Serving IMAGES from:', path_1.default.join(__dirname, '../../user-panel/public/IMAGES'));
-console.log('Path exists:', fs_1.default.existsSync(path_1.default.join(__dirname, '../../user-panel/public/IMAGES')));
+console.log('Serving IMAGES from:', imagesPath);
+console.log('Path exists:', fs_1.default.existsSync(imagesPath));
 const clientOrigin = process.env.CLIENT_ORIGIN || `http://${process.env.BACKEND_HOST || 'localhost'}:${process.env.USER_PANEL_PORT || '5173'}`;
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
 // Basic in-memory rate limiting (IP-based)
