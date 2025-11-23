@@ -89,7 +89,16 @@ const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 // Serve uploaded files with CORS headers
-const uploadsDir = path_1.default.resolve(process.cwd(), 'uploads');
+const defaultUploadsDir = path_1.default.resolve(__dirname, '../uploads');
+const uploadsDir = process.env.UPLOADS_DIR
+    ? path_1.default.resolve(process.env.UPLOADS_DIR)
+    : defaultUploadsDir;
+if (process.env.UPLOADS_DIR) {
+    console.log('[uploads] Using custom directory from UPLOADS_DIR:', uploadsDir);
+}
+else if (path_1.default.resolve(process.cwd(), 'uploads') !== uploadsDir) {
+    console.log('[uploads] Falling back to', uploadsDir, 'instead of process.cwd()');
+}
 app.use('/uploads', (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -409,12 +418,11 @@ const db = {
 const storage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
         try {
-            const uploadDir = path_1.default.resolve(process.cwd(), 'uploads');
-            if (!fs_1.default.existsSync(uploadDir)) {
-                fs_1.default.mkdirSync(uploadDir, { recursive: true });
-                console.log('Created uploads directory:', uploadDir);
+            if (!fs_1.default.existsSync(uploadsDir)) {
+                fs_1.default.mkdirSync(uploadsDir, { recursive: true });
+                console.log('Created uploads directory:', uploadsDir);
             }
-            cb(null, uploadDir);
+            cb(null, uploadsDir);
         }
         catch (error) {
             console.error('Error setting upload destination:', error);
