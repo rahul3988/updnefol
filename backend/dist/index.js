@@ -98,12 +98,25 @@ app.use('/uploads', (req, res, next) => {
     }
     next();
 }, express_1.default.static('uploads'));
-// Serve user panel images with CORS headers
-// In production, images are in dist/IMAGES, in development they're in public/IMAGES
-const userPanelDistImages = path_1.default.join(__dirname, '../../user-panel/dist/IMAGES');
-const userPanelPublicImages = path_1.default.join(__dirname, '../../user-panel/public/IMAGES');
-const imagesPath = fs_1.default.existsSync(userPanelDistImages) ? userPanelDistImages : userPanelPublicImages;
-app.use('/IMAGES', (req, res, next) => {
+// Serve panel images with CORS headers from multiple possible locations
+// Priority: explicit env override -> built dist assets -> public fallbacks
+const imageSourceCandidates = [
+    process.env.IMAGES_PATH,
+    path_1.default.join(__dirname, '../../user-panel/dist/IMAGES'),
+    path_1.default.join(__dirname, '../../admin-panel/dist/IMAGES'),
+    path_1.default.join(__dirname, '../../user-panel/public/IMAGES'),
+    path_1.default.join(__dirname, '../../admin-panel/public/IMAGES')
+].filter((candidate) => Boolean(candidate && candidate.trim()));
+const imageSources = imageSourceCandidates.filter((candidate, idx, arr) => {
+    const resolved = path_1.default.resolve(candidate);
+    const exists = fs_1.default.existsSync(resolved);
+    if (!exists) {
+        return false;
+    }
+    // Deduplicate identical resolved paths
+    return arr.findIndex((original) => path_1.default.resolve(original || '') === resolved) === idx;
+});
+const imageCorsMiddleware = (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -111,10 +124,20 @@ app.use('/IMAGES', (req, res, next) => {
         return res.sendStatus(200);
     }
     next();
-}, express_1.default.static(imagesPath));
-// Debug: Log the path being used
-console.log('Serving IMAGES from:', imagesPath);
-console.log('Path exists:', fs_1.default.existsSync(imagesPath));
+};
+app.use('/IMAGES', imageCorsMiddleware);
+if (imageSources.length === 0) {
+    const fallback = path_1.default.join(__dirname, '../../user-panel/dist/IMAGES');
+    console.warn('[IMAGES] No image directories found. Requests will 404 unless assets exist at', fallback);
+    app.use('/IMAGES', express_1.default.static(fallback));
+}
+else {
+    imageSources.forEach((source) => {
+        const resolved = path_1.default.resolve(source);
+        console.log('[IMAGES] Serving static assets from:', resolved);
+        app.use('/IMAGES', express_1.default.static(resolved));
+    });
+}
 // Always default to production - no localhost fallbacks
 const clientOrigin = process.env.CLIENT_ORIGIN || 'https://thenefol.com';
 app.use((0, cors_1.default)({ origin: true, credentials: true }));
@@ -220,12 +243,35 @@ async function attachRBACContext(req) {
     }
 }
 // Combined authenticate + RBAC attach middleware
-function authenticateAndAttach(req, res, next) {
+const authenticateAndAttach = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '').trim();
+    if (token && token.startsWith('staff_')) {
+        staffRoutes.getStaffContextByToken(pool, token)
+            .then((context) => {
+            if (!context) {
+                return (0, apiHelpers_1.sendError)(res, 401, 'Invalid admin session');
+            }
+            ;
+            req.staffId = context.staffId;
+            req.staffSessionId = context.sessionId;
+            req.staffSessionToken = context.token;
+            req.userRole = context.primaryRole;
+            req.userPermissions = context.permissions;
+            req.staffContext = context;
+            next();
+        })
+            .catch((err) => {
+            console.error('Staff session validation failed:', err);
+            (0, apiHelpers_1.sendError)(res, 401, 'Invalid admin session');
+        });
+        return;
+    }
     (0, apiHelpers_1.authenticateToken)(req, res, async () => {
         await attachRBACContext(req);
         next();
     });
-}
+};
 // Create HTTP server and Socket.IO
 const server = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(server, {
@@ -239,6 +285,7 @@ const io = new socket_io_1.Server(server, {
 });
 const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/nefol';
 const pool = new pg_1.Pool({ connectionString });
+const staffAuthMiddleware = staffRoutes.createStaffAuthMiddleware(pool);
 // Middleware to allow staff with permissions OR regular authenticated users to create orders
 function allowOrderCreation(req, res, next) {
     // First check if admin/staff user via headers (admin panel sends these)
@@ -773,6 +820,10 @@ app.get('/api/staff/permissions', (req, res) => staffRoutes.listPermissions(pool
 app.get('/api/staff/role-permissions', (req, res) => staffRoutes.getRolePermissions(pool, req, res));
 app.post('/api/staff/role-permissions/set', (req, res) => staffRoutes.setRolePermissions(pool, req, res));
 app.get('/api/staff/activity', (req, res) => staffRoutes.listStaffActivity(pool, req, res));
+app.post('/api/staff/auth/login', (req, res) => staffRoutes.staffLogin(pool, req, res));
+app.post('/api/staff/auth/logout', staffAuthMiddleware, (req, res) => staffRoutes.staffLogout(pool, req, res));
+app.get('/api/staff/auth/me', staffAuthMiddleware, (req, res) => staffRoutes.staffMe(pool, req, res));
+app.post('/api/staff/auth/change-password', staffAuthMiddleware, (req, res) => staffRoutes.staffChangePassword(pool, req, res));
 app.post('/api/staff/users/reset-password', (req, res) => staffRoutes.resetPassword(pool, req, res));
 app.post('/api/staff/users/disable', (req, res) => staffRoutes.disableStaff(pool, req, res));
 app.post('/api/staff/seed-standard', (req, res) => staffRoutes.seedStandardRolesAndPermissions(pool, req, res));

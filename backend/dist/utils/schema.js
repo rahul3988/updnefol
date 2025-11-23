@@ -1370,9 +1370,28 @@ async function ensureSchema(pool) {
       email text unique not null,
       password text not null,
       is_active boolean default true,
+      last_login_at timestamptz,
+      last_logout_at timestamptz,
+      password_changed_at timestamptz,
+      failed_login_attempts integer default 0,
+      last_failed_login_at timestamptz,
       created_at timestamptz default now(),
       updated_at timestamptz default now()
     );
+
+    create table if not exists staff_sessions (
+      id serial primary key,
+      staff_id integer not null references staff_users(id) on delete cascade,
+      token text not null unique,
+      user_agent text,
+      ip_address text,
+      metadata jsonb,
+      created_at timestamptz default now(),
+      expires_at timestamptz not null,
+      revoked_at timestamptz
+    );
+
+    create index if not exists idx_staff_sessions_token on staff_sessions(token);
 
     create table if not exists roles (
       id serial primary key,
