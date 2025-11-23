@@ -8,6 +8,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
+        UPLOADS_DIR: '/var/www/nefol/backend/uploads',
         PORT: 2000,
         HOST: '0.0.0.0',
         DATABASE_URL: 'postgresql://nofol_users:Anoopnefoldb@localhost:5432/nefol'
