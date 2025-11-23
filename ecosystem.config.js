@@ -9,7 +9,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 2000,
-        HOST: '0.0.0.0'
+        HOST: '0.0.0.0',
+        DATABASE_URL: 'postgresql://nofol_users:Anoopnefoldb@localhost:5432/nefol'
       },
       error_file: '/var/log/pm2/nefol-backend-error.log',
       out_file: '/var/log/pm2/nefol-backend-out.log',

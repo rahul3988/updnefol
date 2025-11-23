@@ -11,16 +11,37 @@ const PRECACHE_ASSETS = [
   '/IMAGES/dark theme logo.webp'
 ]
 
+async function precacheAppShell() {
+  console.log('[Service Worker] Caching app shell')
+  const cache = await caches.open(CACHE_NAME)
+  const results = await Promise.allSettled(
+    PRECACHE_ASSETS.map(async (asset) => {
+      try {
+        const request = new Request(asset, { cache: 'reload' })
+        const response = await fetch(request)
+        if (!response.ok || response.status === 206) {
+          throw new Error(`status: ${response.status}`)
+        }
+        await cache.put(request, response.clone())
+      } catch (error) {
+        throw new Error(`[Service Worker] Failed to precache ${asset} (${error})`)
+      }
+    })
+  )
+
+  const failures = results.filter((result) => result.status === 'rejected')
+  if (failures.length) {
+    failures.forEach((failure) => console.warn(failure.reason))
+  }
+}
+
 // Install event - cache essential assets
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installing...')
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('[Service Worker] Caching app shell')
-        return cache.addAll(PRECACHE_ASSETS)
-      })
-      .then(() => self.skipWaiting())
+    precacheAppShell()
+      .catch((error) => console.warn(error))
+      .finally(() => self.skipWaiting())
   )
 })
 
@@ -51,6 +72,11 @@ self.addEventListener('fetch', (event) => {
 
   // Skip cross-origin requests
   if (url.origin !== location.origin) {
+    return
+  }
+
+  // Skip range requests to avoid partial response caching
+  if (request.headers.has('range')) {
     return
   }
 
