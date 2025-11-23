@@ -89,6 +89,7 @@ const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 // Serve uploaded files with CORS headers
+const uploadsDir = path_1.default.resolve(process.cwd(), 'uploads');
 app.use('/uploads', (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -97,7 +98,7 @@ app.use('/uploads', (req, res, next) => {
         return res.sendStatus(200);
     }
     next();
-}, express_1.default.static('uploads'));
+}, express_1.default.static(uploadsDir));
 // Serve panel images with CORS headers from multiple possible locations
 // Priority: explicit env override -> built dist assets -> public fallbacks
 const imageSourceCandidates = [
@@ -455,7 +456,7 @@ const upload = (0, multer_1.default)({
     }
 });
 // Ensure uploads directory exists
-const uploadsDir = path_1.default.resolve(process.cwd(), 'uploads');
+// uploadsDir is already declared at line 92
 if (!fs_1.default.existsSync(uploadsDir)) {
     try {
         fs_1.default.mkdirSync(uploadsDir, { recursive: true });

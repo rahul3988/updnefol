@@ -186,8 +186,7 @@ async function staffLogin(pool, req, res) {
         await pool.query(`insert into staff_sessions (staff_id, token, user_agent, ip_address, metadata, expires_at)
        values ($1, $2, $3, $4, $5, $6)`, [staff.id, sessionToken, userAgent, ipAddress, JSON.stringify({ source: 'admin-panel' }), expiresAt]);
         await pool.query(`update staff_users
-       set last_login_at = now(), failed_login_attempts = 0, updated_at = now(),
-           password_changed_at = coalesce(password_changed_at, now())
+       set last_login_at = now(), failed_login_attempts = 0, updated_at = now()
        where id = $1`, [staff.id]);
         await logStaff(pool, staff.id, 'login', { ipAddress });
         (0, apiHelpers_1.sendSuccess)(res, {
@@ -430,7 +429,7 @@ async function staffChangePassword(pool, req, res) {
         }
         const hashed = hashPassword(String(newPassword));
         await pool.query(`update staff_users
-         set password = $2, password_changed_at = now(), updated_at = now()
+         set password = $2, updated_at = now()
        where id = $1`, [staffId, hashed]);
         await pool.query(`update staff_sessions
          set revoked_at = now()
