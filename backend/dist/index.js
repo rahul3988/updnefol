@@ -89,16 +89,6 @@ const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 // Serve uploaded files with CORS headers
-const defaultUploadsDir = path_1.default.resolve(__dirname, '../uploads');
-const uploadsDir = process.env.UPLOADS_DIR
-    ? path_1.default.resolve(process.env.UPLOADS_DIR)
-    : defaultUploadsDir;
-if (process.env.UPLOADS_DIR) {
-    console.log('[uploads] Using custom directory from UPLOADS_DIR:', uploadsDir);
-}
-else if (path_1.default.resolve(process.cwd(), 'uploads') !== uploadsDir) {
-    console.log('[uploads] Falling back to', uploadsDir, 'instead of process.cwd()');
-}
 app.use('/uploads', (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -107,7 +97,7 @@ app.use('/uploads', (req, res, next) => {
         return res.sendStatus(200);
     }
     next();
-}, express_1.default.static(uploadsDir));
+}, express_1.default.static('uploads'));
 // Serve panel images with CORS headers from multiple possible locations
 // Priority: explicit env override -> built dist assets -> public fallbacks
 const imageSourceCandidates = [
@@ -418,11 +408,12 @@ const db = {
 const storage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
         try {
-            if (!fs_1.default.existsSync(uploadsDir)) {
-                fs_1.default.mkdirSync(uploadsDir, { recursive: true });
-                console.log('Created uploads directory:', uploadsDir);
+            const uploadDir = path_1.default.resolve(process.cwd(), 'uploads');
+            if (!fs_1.default.existsSync(uploadDir)) {
+                fs_1.default.mkdirSync(uploadDir, { recursive: true });
+                console.log('Created uploads directory:', uploadDir);
             }
-            cb(null, uploadsDir);
+            cb(null, uploadDir);
         }
         catch (error) {
             console.error('Error setting upload destination:', error);
@@ -464,7 +455,7 @@ const upload = (0, multer_1.default)({
     }
 });
 // Ensure uploads directory exists
-// uploadsDir is already declared at line 92
+const uploadsDir = path_1.default.resolve(process.cwd(), 'uploads');
 if (!fs_1.default.existsSync(uploadsDir)) {
     try {
         fs_1.default.mkdirSync(uploadsDir, { recursive: true });

@@ -11,46 +11,6 @@ function createCMSRouter(pool, io) {
             console.log('📡 Broadcasting CMS update:', event);
         }
     };
-    const extractAssetUrls = (items) => {
-        if (!items)
-            return [];
-        const list = Array.isArray(items) ? items : [items];
-        return list.map(item => {
-            if (!item)
-                return null;
-            if (typeof item === 'string')
-                return item;
-            return item.url || item.path || item.src || item.image || item.file || null;
-        }).filter(Boolean);
-    };
-    const enhanceSectionContent = (section) => {
-        if (!section || !section.content || typeof section.content !== 'object')
-            return section;
-        const content = { ...section.content };
-        const hasImages = Array.isArray(content.images) && content.images.length > 0;
-        if (!hasImages && Array.isArray(content.badges)) {
-            const badgeImages = extractAssetUrls(content.badges);
-            if (badgeImages.length)
-                content.images = badgeImages;
-        }
-        if (!Array.isArray(content.images) || content.images.length === 0) {
-            const mediaSources = [
-                extractAssetUrls(content.mediaItems),
-                extractAssetUrls(content.media),
-                extractAssetUrls(content.videos)
-            ];
-            for (const urls of mediaSources) {
-                if (urls.length) {
-                    content.images = urls;
-                    break;
-                }
-            }
-        }
-        if (!content.image && Array.isArray(content.images) && content.images.length > 0) {
-            content.image = content.images[0];
-        }
-        return { ...section, content };
-    };
     // Initialize CMS tables
     const initTables = async () => {
         await pool.query(`
@@ -106,7 +66,7 @@ function createCMSRouter(pool, io) {
             const sectionsResult = await pool.query('SELECT * FROM cms_sections WHERE page_id = $1 AND is_active = true ORDER BY order_index', [pageResult.rows[0]?.id]);
             res.json({
                 page: pageResult.rows[0] || null,
-                sections: sectionsResult.rows.map(enhanceSectionContent)
+                sections: sectionsResult.rows
             });
         }
         catch (error) {
@@ -168,8 +128,7 @@ function createCMSRouter(pool, io) {
            JOIN cms_pages p ON s.page_id = p.id
            WHERE p.slug = $1 ORDER BY s.order_index`;
             const { rows } = await pool.query(query, [pageSlug]);
-            const enhancedRows = rows.map(enhanceSectionContent);
-            res.json(enhancedRows);
+            res.json(rows);
         }
         catch (error) {
             res.status(500).json({ error: error.message });
