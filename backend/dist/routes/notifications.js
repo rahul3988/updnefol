@@ -139,13 +139,30 @@ async function testEmail(pool, req, res) {
             return (0, apiHelpers_1.sendError)(res, 400, validationError);
         const { rows } = await pool.query('select * from notification_config order by id desc limit 1');
         const cfg = rows[0];
+        if (!cfg)
+            return (0, apiHelpers_1.sendError)(res, 400, 'No notification configuration found. Please configure SMTP settings first.');
         if (!cfg?.smtp_user || !cfg?.smtp_pass)
-            return (0, apiHelpers_1.sendError)(res, 400, 'SMTP config missing');
-        const transporter = createTransport(cfg);
-        const info = await transporter.sendMail({ from: cfg.from_email || cfg.smtp_user, to, subject, text });
-        (0, apiHelpers_1.sendSuccess)(res, { sent: true, messageId: info.messageId });
+            return (0, apiHelpers_1.sendError)(res, 400, 'SMTP credentials missing. Please configure SMTP user and password.');
+        if (!cfg?.smtp_provider)
+            return (0, apiHelpers_1.sendError)(res, 400, 'SMTP provider not configured. Please select an SMTP provider.');
+        try {
+            const transporter = createTransport(cfg);
+            const info = await transporter.sendMail({
+                from: cfg.from_email || cfg.smtp_user,
+                to,
+                subject: subject || 'Test Email',
+                text: text || 'This is a test email from your notification system.'
+            });
+            (0, apiHelpers_1.sendSuccess)(res, { sent: true, messageId: info.messageId });
+        }
+        catch (emailErr) {
+            console.error('Email sending error:', emailErr);
+            const errorMessage = emailErr?.message || 'Failed to send email';
+            (0, apiHelpers_1.sendError)(res, 500, `Email sending failed: ${errorMessage}`, emailErr);
+        }
     }
     catch (err) {
+        console.error('Test email endpoint error:', err);
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to send email', err);
     }
 }
