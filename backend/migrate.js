@@ -130,7 +130,7 @@ async function runMigration() {
       CREATE TABLE IF NOT EXISTS whatsapp_chat_sessions (
         id serial primary key,
         customer_name text not null,
-        customer_phone text not null unique,
+        customer_phone text not null,
         customer_email text,
         status text not null default 'active',
         priority text not null default 'medium',
@@ -282,6 +282,39 @@ async function runMigration() {
       CREATE INDEX IF NOT EXISTS idx_whatsapp_subscriptions_phone ON whatsapp_subscriptions(phone);
       CREATE INDEX IF NOT EXISTS idx_whatsapp_subscriptions_active ON whatsapp_subscriptions(is_active);
       CREATE INDEX IF NOT EXISTS idx_whatsapp_chat_phone ON whatsapp_chat(phone_number);
+    `);
+    
+    // Clean up duplicate phone numbers in whatsapp_chat_sessions before adding unique constraint
+    console.log('🧹 Cleaning up duplicate phone numbers in whatsapp_chat_sessions...');
+    await pool.query(`
+      -- Remove duplicate phone numbers, keeping the most recent record for each phone
+      WITH duplicates AS (
+        SELECT id, customer_phone,
+               ROW_NUMBER() OVER (PARTITION BY customer_phone ORDER BY updated_at DESC, created_at DESC) as rn
+        FROM whatsapp_chat_sessions
+      )
+      DELETE FROM whatsapp_chat_sessions
+      WHERE id IN (
+        SELECT id FROM duplicates WHERE rn > 1
+      );
+    `);
+    
+    // Add unique constraint on customer_phone if it doesn't exist
+    console.log('🔒 Adding unique constraint on customer_phone...');
+    await pool.query(`
+      DO $$
+      BEGIN
+        -- Check if constraint already exists
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conname = 'whatsapp_chat_sessions_customer_phone_key'
+          AND conrelid = 'whatsapp_chat_sessions'::regclass
+        ) THEN
+          ALTER TABLE whatsapp_chat_sessions 
+          ADD CONSTRAINT whatsapp_chat_sessions_customer_phone_key 
+          UNIQUE (customer_phone);
+        END IF;
+      END $$;
     `);
     
     // Create trigger function
