@@ -672,7 +672,7 @@ async function ensureSchema(pool) {
     create table if not exists whatsapp_chat_sessions (
       id serial primary key,
       customer_name text not null,
-      customer_phone text not null,
+      customer_phone text not null unique,
       customer_email text,
       status text not null default 'active',
       priority text not null default 'medium',
@@ -744,6 +744,40 @@ async function ensureSchema(pool) {
       created_at timestamptz default now(),
       updated_at timestamptz default now()
     );
+    
+    -- WhatsApp incoming messages log
+    create table if not exists whatsapp_incoming_messages (
+      id serial primary key,
+      message_id text unique not null,
+      from_phone text not null,
+      to_phone text,
+      message_type text not null, -- 'text', 'image', 'document', 'video', 'audio', etc.
+      message_text text,
+      media_url text,
+      timestamp timestamptz not null,
+      status text default 'received' check (status in ('received', 'processed', 'replied')),
+      raw_payload jsonb,
+      created_at timestamptz default now()
+    );
+    
+    create index if not exists idx_whatsapp_incoming_messages_from_phone on whatsapp_incoming_messages(from_phone);
+    create index if not exists idx_whatsapp_incoming_messages_timestamp on whatsapp_incoming_messages(timestamp);
+    create index if not exists idx_whatsapp_incoming_messages_status on whatsapp_incoming_messages(status);
+    
+    -- WhatsApp message status tracking
+    create table if not exists whatsapp_message_status (
+      id serial primary key,
+      message_id text not null,
+      status text not null check (status in ('sent', 'delivered', 'read', 'failed')),
+      timestamp timestamptz not null,
+      error_code text,
+      error_message text,
+      created_at timestamptz default now()
+    );
+    
+    create index if not exists idx_whatsapp_message_status_message_id on whatsapp_message_status(message_id);
+    create index if not exists idx_whatsapp_message_status_status on whatsapp_message_status(status);
+    create index if not exists idx_whatsapp_message_status_timestamp on whatsapp_message_status(timestamp);
     
     -- Live Chat
     create table if not exists live_chat_sessions (

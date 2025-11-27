@@ -69,6 +69,7 @@ const blog_1 = __importStar(require("./routes/blog"));
 const affiliateRoutes = __importStar(require("./routes/affiliate"));
 const searchRoutes = __importStar(require("./routes/search"));
 const marketingRoutes = __importStar(require("./routes/marketing"));
+const whatsappWebhookRoutes = __importStar(require("./routes/whatsappWebhook"));
 const paymentRoutes = __importStar(require("./routes/payment"));
 const userRoutes = __importStar(require("./routes/users"));
 const notificationRoutes = __importStar(require("./routes/notifications"));
@@ -634,6 +635,11 @@ io.on('connection', (socket) => {
         console.error('Socket error:', socket.id, error);
     });
 });
+// ==================== WHATSAPP WEBHOOK (must be before other routes for proper handling) ====================
+// Note: POST webhook uses express.raw() to get raw body for signature verification
+// The handler will parse JSON from the raw body
+app.get('/api/whatsapp/webhook', whatsappWebhookRoutes.verifyWebhook);
+app.post('/api/whatsapp/webhook', express_1.default.raw({ type: 'application/json' }), whatsappWebhookRoutes.handleWebhook.bind(null, pool));
 // ==================== CMS API (with real-time updates) ====================
 app.use('/api/cms', (0, cms_1.default)(pool, io));
 // ==================== BLOG API ====================
