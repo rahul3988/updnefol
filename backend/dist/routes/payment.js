@@ -21,22 +21,55 @@ const razorpay = new razorpay_1.default({
 const createRazorpayOrder = (pool) => async (req, res) => {
     try {
         const { amount, currency = 'INR', order_number, customer_name, customer_email, customer_phone } = req.body;
-        if (!amount || !order_number) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Amount and order_number are required');
+        // Validate required fields
+        if (!amount || amount <= 0) {
+            console.error('Invalid amount provided:', amount);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Valid amount is required');
         }
+        if (!order_number || typeof order_number !== 'string' || order_number.trim() === '') {
+            console.error('Invalid order_number provided:', order_number);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Valid order_number is required');
+        }
+        // Validate amount is a number
+        const amountNum = parseFloat(String(amount));
+        if (isNaN(amountNum) || amountNum <= 0) {
+            console.error('Amount is not a valid positive number:', amount);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Amount must be a valid positive number');
+        }
+        // Validate minimum amount (Razorpay minimum is 1 INR = 100 paise)
+        if (amountNum < 1) {
+            console.error('Amount below minimum:', amountNum);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Amount must be at least ₹1');
+        }
+        // Check if Razorpay credentials are configured
+        if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+            console.error('Razorpay credentials not configured');
+            return (0, apiHelpers_1.sendError)(res, 500, 'Payment gateway not configured');
+        }
+        console.log('Creating Razorpay order:', {
+            order_number,
+            amount: amountNum,
+            currency,
+            amount_in_paise: Math.round(amountNum * 100)
+        });
         // Create order in Razorpay
         const options = {
-            amount: Math.round(amount * 100), // Convert to paise
+            amount: Math.round(amountNum * 100), // Convert to paise
             currency: currency,
             receipt: order_number,
             notes: {
                 order_number,
-                customer_name,
-                customer_email,
-                customer_phone
+                customer_name: customer_name || undefined,
+                customer_email: customer_email || undefined,
+                customer_phone: customer_phone || undefined
             }
         };
         const order = await razorpay.orders.create(options);
+        console.log('✅ Razorpay order created successfully:', {
+            order_id: order.id,
+            order_number,
+            amount: order.amount
+        });
         (0, apiHelpers_1.sendSuccess)(res, {
             id: order.id,
             amount: order.amount,
@@ -45,8 +78,25 @@ const createRazorpayOrder = (pool) => async (req, res) => {
         });
     }
     catch (err) {
-        console.error('Error creating Razorpay order:', err);
-        (0, apiHelpers_1.sendError)(res, 500, 'Failed to create Razorpay order', err);
+        console.error('Error creating Razorpay order:', {
+            error: err.message,
+            stack: err.stack,
+            error_description: err.description || err.error?.description,
+            error_code: err.statusCode || err.error?.code,
+            body: req.body
+        });
+        // Provide more specific error messages
+        let errorMessage = 'Failed to create Razorpay order';
+        if (err.statusCode === 401) {
+            errorMessage = 'Invalid Razorpay credentials';
+        }
+        else if (err.statusCode === 400) {
+            errorMessage = err.description || err.error?.description || 'Invalid payment request';
+        }
+        else if (err.message) {
+            errorMessage = err.message;
+        }
+        (0, apiHelpers_1.sendError)(res, 500, errorMessage, err);
     }
 };
 exports.createRazorpayOrder = createRazorpayOrder;
