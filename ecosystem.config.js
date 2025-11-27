@@ -6,6 +6,7 @@ module.exports = {
       cwd: '/var/www/nefol',
       instances: 1,
       exec_mode: 'fork',
+      env_file: '/var/www/nefol/backend/.env',
       env: {
         NODE_ENV: 'production',
         UPLOADS_DIR: '/var/www/nefol/backend/uploads',
