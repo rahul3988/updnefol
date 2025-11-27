@@ -1,0 +1,360 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sendWhatsAppMessage = sendWhatsAppMessage;
+exports.sendWelcomeOffer = sendWelcomeOffer;
+exports.verifyWebhookSignature = verifyWebhookSignature;
+exports.extractMessageContent = extractMessageContent;
+exports.processIncomingMessage = processIncomingMessage;
+exports.processStatusUpdate = processStatusUpdate;
+const crypto_1 = __importDefault(require("crypto"));
+/**
+ * Send a WhatsApp message using Facebook Graph API
+ * @param phone - Recipient phone number (with country code, no spaces/special chars)
+ * @param message - Text message to send
+ * @param pool - Database pool (optional, for logging)
+ * @returns Promise with success status and response data
+ */
+async function sendWhatsAppMessage(phone, message, pool) {
+    try {
+        // Get WhatsApp credentials from environment
+        const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+        const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+        if (!accessToken || !phoneNumberId) {
+            console.error('❌ WhatsApp credentials not configured');
+            console.error('   Missing:', !accessToken ? 'WHATSAPP_ACCESS_TOKEN' : '', !phoneNumberId ? 'WHATSAPP_PHONE_NUMBER_ID' : '');
+            return { success: false, error: 'WhatsApp credentials not configured' };
+        }
+        if (!phone) {
+            return { success: false, error: 'Recipient phone number is required' };
+        }
+        // Prepare the request body for text message
+        const requestBody = {
+            messaging_product: 'whatsapp',
+            to: phone,
+            type: 'text',
+            text: {
+                body: message
+            }
+        };
+        // Make request to Facebook Graph API
+        const facebookUrl = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
+        const response = await fetch(facebookUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        const responseData = await response.json();
+        if (!response.ok) {
+            console.error('❌ WhatsApp API error:', JSON.stringify(responseData, null, 2));
+            console.error('   Phone:', phone);
+            console.error('   Status:', response.status);
+            return {
+                success: false,
+                error: responseData.error?.message || 'Failed to send WhatsApp message',
+                data: responseData
+            };
+        }
+        // Log the message to database if pool is provided and table exists
+        if (pool) {
+            try {
+                await pool.query(`
+          INSERT INTO whatsapp_chat_sessions (customer_name, customer_phone, last_message, last_message_time, status)
+          VALUES ($1, $2, $3, NOW(), 'active')
+          ON CONFLICT (customer_phone) 
+          DO UPDATE SET 
+            last_message = $3,
+            last_message_time = NOW(),
+            status = 'active'
+        `, [`Customer_${phone}`, phone, message]);
+            }
+            catch (dbErr) {
+                // Table might not exist, just log the error
+                console.error('Failed to log WhatsApp message to database:', dbErr);
+            }
+        }
+        return {
+            success: true,
+            data: responseData
+        };
+    }
+    catch (err) {
+        console.error('WhatsApp send error:', err);
+        return {
+            success: false,
+            error: err.message || 'Failed to send WhatsApp message'
+        };
+    }
+}
+/**
+ * Send a welcome offer message to a new subscriber
+ * @param phone - Recipient phone number
+ * @param name - Subscriber name (optional)
+ * @param pool - Database pool (optional, for logging)
+ * @returns Promise with success status
+ */
+async function sendWelcomeOffer(phone, name, pool) {
+    try {
+        // Get welcome offer message from database settings or use default
+        let welcomeMessage = `🎉 Welcome to NEFÖL! 🎉
+
+Thank you for subscribing to our WhatsApp updates!
+
+As a special welcome gift, you now have access to:
+✨ Exclusive member-only offers
+🎁 Early access to new collections
+💎 Special discounts and promotions
+📱 Real-time updates on sales and launches
+
+We're excited to have you in the NEFÖL family! Stay tuned for amazing fashion updates.`;
+        // Try to get custom welcome message from database
+        if (pool) {
+            try {
+                const result = await pool.query('SELECT setting_value FROM store_settings WHERE setting_key = $1', ['whatsapp_welcome_message']);
+                if (result.rows.length > 0 && result.rows[0].setting_value) {
+                    welcomeMessage = result.rows[0].setting_value;
+                }
+            }
+            catch (err) {
+                // If setting doesn't exist, use default message
+                console.log('Using default welcome message');
+            }
+        }
+        // Personalize message with name if provided
+        if (name) {
+            welcomeMessage = `Hi ${name}! 👋\n\n${welcomeMessage}`;
+        }
+        // Send the welcome message
+        const result = await sendWhatsAppMessage(phone, welcomeMessage, pool);
+        if (result.success) {
+            console.log(`✅ Welcome offer sent to ${phone}`);
+        }
+        else {
+            console.error(`❌ Failed to send welcome offer to ${phone}:`, result.error);
+        }
+        return result;
+    }
+    catch (err) {
+        console.error('Error sending welcome offer:', err);
+        return {
+            success: false,
+            error: err.message || 'Failed to send welcome offer'
+        };
+    }
+}
+/**
+ * Verify webhook signature from Meta
+ * @param payload - Raw request body (should be string or Buffer)
+ * @param signature - X-Hub-Signature-256 header value
+ * @param appSecret - WhatsApp App Secret from environment
+ * @returns true if signature is valid
+ */
+function verifyWebhookSignature(payload, signature, appSecret) {
+    try {
+        // Signature format: sha256=<hash>
+        if (!signature.startsWith('sha256=')) {
+            console.error('Invalid signature format');
+            return false;
+        }
+        const expectedSignature = signature.substring(7); // Remove 'sha256=' prefix
+        // Convert payload to string if it's an object
+        const payloadString = typeof payload === 'string'
+            ? payload
+            : JSON.stringify(payload);
+        // Calculate HMAC SHA256
+        const hmac = crypto_1.default.createHmac('sha256', appSecret);
+        hmac.update(payloadString);
+        const calculatedSignature = hmac.digest('hex');
+        // Compare signatures using constant-time comparison
+        const isValid = crypto_1.default.timingSafeEqual(Buffer.from(expectedSignature, 'hex'), Buffer.from(calculatedSignature, 'hex'));
+        if (!isValid) {
+            console.error('Signature mismatch');
+            console.error('Expected:', calculatedSignature);
+            console.error('Received:', expectedSignature);
+        }
+        return isValid;
+    }
+    catch (err) {
+        console.error('Error verifying webhook signature:', err);
+        return false;
+    }
+}
+/**
+ * Extract message content from different message types
+ * @param message - WhatsApp message object from webhook
+ * @returns Extracted content (text, media URL, etc.)
+ */
+function extractMessageContent(message) {
+    const messageType = message.type || 'unknown';
+    switch (messageType) {
+        case 'text':
+            return {
+                type: 'text',
+                text: message.text?.body || ''
+            };
+        case 'image':
+            return {
+                type: 'image',
+                mediaUrl: message.image?.id ? `https://graph.facebook.com/v22.0/${message.image.id}` : undefined,
+                caption: message.image?.caption || '',
+                mimeType: message.image?.mime_type,
+                imageId: message.image?.id
+            };
+        case 'video':
+            return {
+                type: 'video',
+                mediaUrl: message.video?.id ? `https://graph.facebook.com/v22.0/${message.video.id}` : undefined,
+                caption: message.video?.caption || '',
+                mimeType: message.video?.mime_type,
+                videoId: message.video?.id
+            };
+        case 'audio':
+            return {
+                type: 'audio',
+                mediaUrl: message.audio?.id ? `https://graph.facebook.com/v22.0/${message.audio.id}` : undefined,
+                mimeType: message.audio?.mime_type,
+                audioId: message.audio?.id
+            };
+        case 'document':
+            return {
+                type: 'document',
+                mediaUrl: message.document?.id ? `https://graph.facebook.com/v22.0/${message.document.id}` : undefined,
+                caption: message.document?.caption || '',
+                fileName: message.document?.filename,
+                mimeType: message.document?.mime_type,
+                documentId: message.document?.id
+            };
+        case 'location':
+            return {
+                type: 'location',
+                text: `Location: ${message.location?.latitude}, ${message.location?.longitude}`
+            };
+        case 'contacts':
+            return {
+                type: 'contacts',
+                text: 'Contact shared'
+            };
+        case 'sticker':
+            return {
+                type: 'sticker',
+                mediaUrl: message.sticker?.id ? `https://graph.facebook.com/v22.0/${message.sticker.id}` : undefined,
+                mimeType: message.sticker?.mime_type
+            };
+        default:
+            return {
+                type: messageType,
+                text: JSON.stringify(message)
+            };
+    }
+}
+/**
+ * Process incoming WhatsApp message from webhook
+ * @param pool - Database pool
+ * @param message - Message object from webhook
+ * @param metadata - Metadata from webhook (phone number, etc.)
+ */
+async function processIncomingMessage(pool, message, metadata) {
+    try {
+        const messageId = message.id;
+        const fromPhone = message.from;
+        const timestamp = message.timestamp ? new Date(parseInt(message.timestamp) * 1000) : new Date();
+        // Extract message content
+        const content = extractMessageContent(message);
+        // Log incoming message to database
+        try {
+            await pool.query(`
+        INSERT INTO whatsapp_incoming_messages (
+          message_id, from_phone, to_phone, message_type, message_text,
+          media_url, timestamp, status, raw_payload, created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        ON CONFLICT (message_id) DO NOTHING
+      `, [
+                messageId,
+                fromPhone,
+                metadata?.phone_number_id || null,
+                content.type,
+                content.text || content.caption || null,
+                content.mediaUrl || null,
+                timestamp,
+                'received',
+                JSON.stringify(message)
+            ]);
+        }
+        catch (dbErr) {
+            // Table might not exist yet, log error but continue
+            console.error('Failed to log incoming message to database:', dbErr.message);
+        }
+        // Update or create chat session
+        try {
+            const customerName = `Customer_${fromPhone}`;
+            const lastMessage = content.text || content.caption || `[${content.type}]`;
+            await pool.query(`
+        INSERT INTO whatsapp_chat_sessions (
+          customer_name, customer_phone, last_message, last_message_time, status, message_count
+        )
+        VALUES ($1, $2, $3, $4, 'active', 1)
+        ON CONFLICT (customer_phone) DO UPDATE SET
+          last_message = $3,
+          last_message_time = $4,
+          status = 'active',
+          message_count = whatsapp_chat_sessions.message_count + 1,
+          updated_at = NOW()
+      `, [customerName, fromPhone, lastMessage, timestamp]);
+        }
+        catch (dbErr) {
+            console.error('Failed to update chat session:', dbErr.message);
+        }
+        console.log(`✅ Processed incoming ${content.type} message from ${fromPhone}`);
+    }
+    catch (err) {
+        console.error('Error processing incoming message:', err);
+        throw err;
+    }
+}
+/**
+ * Process message status update from webhook
+ * @param pool - Database pool
+ * @param status - Status object from webhook
+ */
+async function processStatusUpdate(pool, status) {
+    try {
+        const messageId = status.id;
+        const statusType = status.status; // 'sent', 'delivered', 'read', 'failed'
+        const timestamp = status.timestamp ? new Date(parseInt(status.timestamp) * 1000) : new Date();
+        const recipientId = status.recipient_id;
+        // Log status update to database
+        try {
+            await pool.query(`
+        INSERT INTO whatsapp_message_status (
+          message_id, status, timestamp, error_code, error_message, created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, NOW())
+      `, [
+                messageId,
+                statusType,
+                timestamp,
+                status.errors?.[0]?.code || null,
+                status.errors?.[0]?.title || status.errors?.[0]?.message || null
+            ]);
+        }
+        catch (dbErr) {
+            // Table might not exist yet, log error but continue
+            console.error('Failed to log status update to database:', dbErr.message);
+        }
+        console.log(`✅ Processed status update: ${statusType} for message ${messageId}`);
+        // If message failed, log error details
+        if (statusType === 'failed' && status.errors) {
+            console.error(`❌ Message ${messageId} failed:`, status.errors);
+        }
+    }
+    catch (err) {
+        console.error('Error processing status update:', err);
+        throw err;
+    }
+}
