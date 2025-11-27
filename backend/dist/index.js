@@ -88,11 +88,10 @@ const productCollectionRoutes = __importStar(require("./routes/productCollection
 const apiManager_1 = require("./routes/apiManager");
 const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const app = (0, express_1.default)();
-// Configure query parser to handle parameters with dots (needed for Meta webhook verification)
-app.set('query parser', (str) => {
-    const qs = require('qs');
-    return qs.parse(str, { allowDots: true });
-});
+// Register GET webhook route early (doesn't need pool, and must be before express.json())
+// This handles Meta's webhook verification
+app.get('/api/whatsapp/webhook', whatsappWebhookRoutes.verifyWebhook);
+// Now apply JSON parsing for all other routes (but webhook POST will use raw body)
 app.use(express_1.default.json());
 // Serve uploaded files with CORS headers
 app.use('/uploads', (req, res, next) => {
@@ -292,6 +291,12 @@ const io = new socket_io_1.Server(server, {
 const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/nefol';
 const pool = new pg_1.Pool({ connectionString });
 const staffAuthMiddleware = staffRoutes.createStaffAuthMiddleware(pool);
+// Register POST webhook route after pool is defined (must use raw body, not express.json())
+// This route must be registered before other routes to ensure raw body middleware is used
+app.post('/api/whatsapp/webhook', express_1.default.raw({
+    type: 'application/json',
+    limit: '10mb' // Allow larger payloads if needed
+}), whatsappWebhookRoutes.handleWebhook.bind(null, pool));
 // Middleware to allow staff with permissions OR regular authenticated users to create orders
 function allowOrderCreation(req, res, next) {
     // First check if admin/staff user via headers (admin panel sends these)
@@ -640,11 +645,6 @@ io.on('connection', (socket) => {
         console.error('Socket error:', socket.id, error);
     });
 });
-// ==================== WHATSAPP WEBHOOK (must be before other routes for proper handling) ====================
-// Note: POST webhook uses express.raw() to get raw body for signature verification
-// The handler will parse JSON from the raw body
-app.get('/api/whatsapp/webhook', whatsappWebhookRoutes.verifyWebhook);
-app.post('/api/whatsapp/webhook', express_1.default.raw({ type: 'application/json' }), whatsappWebhookRoutes.handleWebhook.bind(null, pool));
 // ==================== CMS API (with real-time updates) ====================
 app.use('/api/cms', (0, cms_1.default)(pool, io));
 // ==================== BLOG API ====================

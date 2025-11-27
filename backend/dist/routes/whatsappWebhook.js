@@ -11,16 +11,19 @@ const verifyWebhook = async (req, res) => {
     try {
         // Parse query parameters manually to handle dots properly
         // Express may not parse query params with dots correctly by default
+        // Also, when behind nginx proxy, req.url might not have query string, use req.originalUrl
         let mode;
         let token;
         let challenge;
-        // Try accessing via req.query first (might work if Express is configured correctly)
+        // Try accessing via req.query first (Express should parse these)
         mode = req.query['hub.mode'];
         token = req.query['hub.verify_token'];
         challenge = req.query['hub.challenge'];
-        // If not found, parse from the raw URL query string
+        // If not found in req.query, try parsing from originalUrl (includes query string even when proxied)
         if (!mode || !token || !challenge) {
-            const queryString = req.url?.split('?')[1] || '';
+            // Use originalUrl which preserves query string even when behind proxy
+            const fullUrl = req.originalUrl || req.url || '';
+            const queryString = fullUrl.split('?')[1] || '';
             const params = new URLSearchParams(queryString);
             mode = mode || params.get('hub.mode') || undefined;
             token = token || params.get('hub.verify_token') || undefined;
@@ -28,8 +31,10 @@ const verifyWebhook = async (req, res) => {
         }
         // Debug logging
         console.log('🔍 Webhook verification request:');
-        console.log('   Full URL:', req.url);
-        console.log('   Query string:', req.url?.split('?')[1] || 'none');
+        console.log('   req.url:', req.url);
+        console.log('   req.originalUrl:', req.originalUrl || 'not available');
+        console.log('   req.query:', JSON.stringify(req.query));
+        console.log('   Query string from URL:', (req.originalUrl || req.url || '').split('?')[1] || 'none');
         console.log('   Mode:', mode || 'undefined');
         console.log('   Token received:', token ? '***' + token.slice(-4) : 'undefined');
         console.log('   Challenge:', challenge ? 'present (' + challenge.length + ' chars)' : 'missing');
@@ -71,8 +76,30 @@ exports.verifyWebhook = verifyWebhook;
 const handleWebhook = async (pool, req, res) => {
     try {
         // Get raw body for signature verification (express.raw() middleware provides Buffer)
-        const rawBody = req.body;
-        const bodyString = rawBody.toString('utf-8');
+        // CRITICAL: The body must be the exact raw bytes as received from Meta
+        let rawBody;
+        let bodyString;
+        if (Buffer.isBuffer(req.body)) {
+            // Body is already a Buffer (from express.raw())
+            rawBody = req.body;
+            bodyString = rawBody.toString('utf-8');
+        }
+        else if (typeof req.body === 'string') {
+            // Body is a string (shouldn't happen with express.raw(), but handle it)
+            bodyString = req.body;
+            rawBody = Buffer.from(bodyString, 'utf-8');
+        }
+        else {
+            // Body was parsed as JSON (shouldn't happen, but handle it)
+            console.error('❌ Body was parsed as JSON instead of raw Buffer');
+            bodyString = JSON.stringify(req.body);
+            rawBody = Buffer.from(bodyString, 'utf-8');
+        }
+        // Debug logging for signature verification
+        console.log('📨 Webhook POST request received:');
+        console.log('   Body type:', Buffer.isBuffer(req.body) ? 'Buffer' : typeof req.body);
+        console.log('   Body length:', rawBody.length, 'bytes');
+        console.log('   Content-Type:', req.headers['content-type']);
         // Verify webhook signature for security
         const signature = req.headers['x-hub-signature-256'];
         if (!signature) {
@@ -87,13 +114,17 @@ const handleWebhook = async (pool, req, res) => {
             console.warn('⚠️  Proceeding without signature verification (not recommended for production)');
         }
         else {
+            // Use the raw body string for signature verification
+            // Meta calculates signature on the exact raw request body
             const isValid = (0, whatsappUtils_1.verifyWebhookSignature)(bodyString, signature, appSecret);
             if (!isValid) {
                 console.error('❌ Invalid webhook signature');
+                console.error('   Body preview (first 200 chars):', bodyString.substring(0, 200));
                 return res.status(401).json({ error: 'Invalid signature' });
             }
+            console.log('✅ Webhook signature verified successfully');
         }
-        // Parse JSON body
+        // Parse JSON body for processing
         const body = JSON.parse(bodyString);
         // Meta webhook payload structure:
         // {
