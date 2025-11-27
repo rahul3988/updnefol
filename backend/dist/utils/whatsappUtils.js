@@ -63,19 +63,49 @@ async function sendWhatsAppMessage(phone, message, pool) {
         // Log the message to database if pool is provided and table exists
         if (pool) {
             try {
-                await pool.query(`
-          INSERT INTO whatsapp_chat_sessions (customer_name, customer_phone, last_message, last_message_time, status)
-          VALUES ($1, $2, $3, NOW(), 'active')
-          ON CONFLICT (customer_phone) 
-          DO UPDATE SET 
-            last_message = $3,
+                const customerName = `Customer_${phone}`;
+                // First try to update existing session
+                const updateResult = await pool.query(`
+          UPDATE whatsapp_chat_sessions
+          SET 
+            last_message = $1,
             last_message_time = NOW(),
-            status = 'active'
-        `, [`Customer_${phone}`, phone, message]);
+            status = 'active',
+            message_count = message_count + 1,
+            updated_at = NOW()
+          WHERE customer_phone = $2
+        `, [message, phone]);
+                // If no rows were updated, insert a new session
+                if (updateResult.rowCount === 0) {
+                    await pool.query(`
+            INSERT INTO whatsapp_chat_sessions (customer_name, customer_phone, last_message, last_message_time, status, message_count)
+            VALUES ($1, $2, $3, NOW(), 'active', 1)
+          `, [customerName, phone, message]);
+                }
             }
             catch (dbErr) {
-                // Table might not exist, just log the error
-                console.error('Failed to log WhatsApp message to database:', dbErr);
+                // Table might not exist, or unique constraint violation (race condition)
+                if (dbErr.code === '23505') {
+                    // Try update again if it was a race condition
+                    try {
+                        await pool.query(`
+              UPDATE whatsapp_chat_sessions
+              SET 
+                last_message = $1,
+                last_message_time = NOW(),
+                status = 'active',
+                message_count = message_count + 1,
+                updated_at = NOW()
+              WHERE customer_phone = $2
+            `, [message, phone]);
+                    }
+                    catch (retryErr) {
+                        console.error('Failed to log WhatsApp message to database:', retryErr.message);
+                    }
+                }
+                else {
+                    console.error('Failed to log WhatsApp message to database:', dbErr.message);
+                }
             }
         }
         return {

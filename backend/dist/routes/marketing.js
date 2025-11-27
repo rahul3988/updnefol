@@ -896,13 +896,47 @@ const sendWhatsAppMessage = async (pool, req, res) => {
         }
         // Log the message to database if chat_sessions table exists
         try {
-            await pool.query(`
-        INSERT INTO whatsapp_chat_sessions (customer_name, customer_phone, last_message, last_message_time, status)
-        VALUES ($1, $2, $3, NOW(), 'active')
-      `, [`Customer_${to}`, to, message || JSON.stringify(template)]);
+            const customerName = `Customer_${to}`;
+            const lastMessage = message || JSON.stringify(template);
+            // First try to update existing session
+            const updateResult = await pool.query(`
+        UPDATE whatsapp_chat_sessions
+        SET 
+          last_message = $1,
+          last_message_time = NOW(),
+          status = 'active',
+          message_count = message_count + 1,
+          updated_at = NOW()
+        WHERE customer_phone = $2
+      `, [lastMessage, to]);
+            // If no rows were updated, insert a new session
+            if (updateResult.rowCount === 0) {
+                await pool.query(`
+          INSERT INTO whatsapp_chat_sessions (customer_name, customer_phone, last_message, last_message_time, status, message_count)
+          VALUES ($1, $2, $3, NOW(), 'active', 1)
+        `, [customerName, to, lastMessage]);
+            }
         }
         catch (dbErr) {
-            console.error('Failed to log WhatsApp message:', dbErr);
+            console.error('Failed to log WhatsApp message:', dbErr.message);
+            // If it's a unique constraint violation, try update again (race condition)
+            if (dbErr.code === '23505') {
+                try {
+                    await pool.query(`
+            UPDATE whatsapp_chat_sessions
+            SET 
+              last_message = $1,
+              last_message_time = NOW(),
+              status = 'active',
+              message_count = message_count + 1,
+              updated_at = NOW()
+            WHERE customer_phone = $2
+          `, [message || JSON.stringify(template), to]);
+                }
+                catch (retryErr) {
+                    console.error('Failed to update chat session on retry:', retryErr.message);
+                }
+            }
         }
         (0, apiHelpers_1.sendSuccess)(res, {
             message: 'WhatsApp message sent successfully',
