@@ -9,9 +9,30 @@ const whatsappUtils_1 = require("../utils/whatsappUtils");
  */
 const verifyWebhook = async (req, res) => {
     try {
-        const mode = req.query['hub.mode'];
-        const token = req.query['hub.verify_token'];
-        const challenge = req.query['hub.challenge'];
+        // Parse query parameters manually to handle dots properly
+        // Express may not parse query params with dots correctly by default
+        let mode;
+        let token;
+        let challenge;
+        // Try accessing via req.query first (might work if Express is configured correctly)
+        mode = req.query['hub.mode'];
+        token = req.query['hub.verify_token'];
+        challenge = req.query['hub.challenge'];
+        // If not found, parse from the raw URL query string
+        if (!mode || !token || !challenge) {
+            const queryString = req.url?.split('?')[1] || '';
+            const params = new URLSearchParams(queryString);
+            mode = mode || params.get('hub.mode') || undefined;
+            token = token || params.get('hub.verify_token') || undefined;
+            challenge = challenge || params.get('hub.challenge') || undefined;
+        }
+        // Debug logging
+        console.log('🔍 Webhook verification request:');
+        console.log('   Full URL:', req.url);
+        console.log('   Query string:', req.url?.split('?')[1] || 'none');
+        console.log('   Mode:', mode || 'undefined');
+        console.log('   Token received:', token ? '***' + token.slice(-4) : 'undefined');
+        console.log('   Challenge:', challenge ? 'present (' + challenge.length + ' chars)' : 'missing');
         const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
         if (!verifyToken) {
             console.error('❌ WHATSAPP_VERIFY_TOKEN not configured in environment');
@@ -20,18 +41,23 @@ const verifyWebhook = async (req, res) => {
         // Verify the mode and token
         if (mode === 'subscribe' && token === verifyToken) {
             console.log('✅ WhatsApp webhook verified successfully');
-            return res.status(200).send(challenge);
+            return res.status(200).send(challenge || '');
         }
         else {
             console.error('❌ WhatsApp webhook verification failed');
-            console.error('   Expected token:', verifyToken);
-            console.error('   Received token:', token);
-            console.error('   Mode:', mode);
+            console.error('   Expected token:', verifyToken ? '***' + verifyToken.slice(-4) : 'not set');
+            console.error('   Received token:', token ? '***' + token.slice(-4) : 'undefined');
+            console.error('   Mode:', mode || 'undefined');
+            console.error('   Challenge:', challenge ? 'present' : 'missing');
             return res.status(403).send('Forbidden');
         }
     }
     catch (err) {
         console.error('Webhook verification error:', err);
+        console.error('   Error details:', err.message);
+        if (err.stack) {
+            console.error('   Stack:', err.stack);
+        }
         return res.status(500).send('Internal server error');
     }
 };

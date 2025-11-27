@@ -88,6 +88,11 @@ const productCollectionRoutes = __importStar(require("./routes/productCollection
 const apiManager_1 = require("./routes/apiManager");
 const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const app = (0, express_1.default)();
+// Configure query parser to handle parameters with dots (needed for Meta webhook verification)
+app.set('query parser', (str) => {
+    const qs = require('qs');
+    return qs.parse(str, { allowDots: true });
+});
 app.use(express_1.default.json());
 // Serve uploaded files with CORS headers
 app.use('/uploads', (req, res, next) => {
