@@ -667,8 +667,10 @@ app.get('/api/affiliate/commission-settings', affiliateRoutes.getAffiliateCommis
 app.get('/api/affiliate/marketing-materials', affiliateRoutes.getAffiliateMarketingMaterials.bind(null, pool));
 // ==================== OPTIMIZED PRODUCTS API ====================
 app.get('/api/products', (req, res) => productRoutes.getProducts(pool, res));
-app.get('/api/products/:id', (req, res) => productRoutes.getProductById(pool, req, res));
+// Specific routes must come before generic :id route
+app.post('/api/products/:productId/view', (req, res) => recommendationRoutes.trackProductView(pool, req, res));
 app.get('/api/products/slug/:slug', (req, res) => productRoutes.getProductBySlug(pool, req, res));
+app.get('/api/products/:id', (req, res) => productRoutes.getProductById(pool, req, res));
 app.post('/api/products', (req, res) => productRoutes.createProduct(pool, req, res));
 app.put('/api/products/:id', (req, res) => productRoutes.updateProduct(pool, req, res, io));
 app.delete('/api/products/:id', (req, res) => productRoutes.deleteProduct(pool, req, res));
@@ -851,7 +853,7 @@ app.post('/api/search/log', (req, res) => searchRoutes.logSearchQuery(pool, req,
 app.post('/api/search/track', (req, res) => recommendationRoutes.trackSearch(pool, req, res));
 app.get('/api/search/popular', (req, res) => recommendationRoutes.getPopularSearches(pool, req, res));
 // ==================== RECOMMENDATIONS & RECENTLY VIEWED ====================
-app.post('/api/products/:productId/view', (req, res) => recommendationRoutes.trackProductView(pool, req, res));
+// Note: /api/products/:productId/view is defined above in PRODUCTS API section
 app.get('/api/recommendations/recently-viewed', (req, res) => recommendationRoutes.getRecentlyViewed(pool, req, res));
 app.get('/api/recommendations/related/:productId', (req, res) => recommendationRoutes.getRelatedProducts(pool, req, res));
 app.get('/api/recommendations', (req, res) => recommendationRoutes.getRecommendedProducts(pool, req, res));
@@ -1580,49 +1582,81 @@ app.get('/api/discounts/usage', async (req, res) => {
 app.post('/api/discounts/apply', async (req, res) => {
     try {
         const { code, amount } = req.body || {};
-        if (!code || !amount) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Discount code and order amount are required');
+        // Validate input
+        if (!code || typeof code !== 'string' || code.trim() === '') {
+            console.error('Invalid discount code input:', { code, type: typeof code });
+            return (0, apiHelpers_1.sendError)(res, 400, 'Discount code is required and must be a non-empty string');
         }
+        if (amount === undefined || amount === null) {
+            console.error('Missing order amount:', { amount });
+            return (0, apiHelpers_1.sendError)(res, 400, 'Order amount is required');
+        }
+        const orderAmount = parseFloat(String(amount));
+        if (isNaN(orderAmount) || orderAmount < 0) {
+            console.error('Invalid order amount:', { amount, parsed: orderAmount });
+            return (0, apiHelpers_1.sendError)(res, 400, 'Order amount must be a valid positive number');
+        }
+        const codeUpper = code.trim().toUpperCase();
+        console.log('Applying discount code:', { code: codeUpper, amount: orderAmount });
         // Find the discount by code
-        const discountResult = await pool.query(`SELECT * FROM discounts WHERE code = $1 AND is_active = true`, [code.toUpperCase()]);
+        const discountResult = await pool.query(`SELECT * FROM discounts WHERE code = $1 AND is_active = true`, [codeUpper]);
         if (discountResult.rows.length === 0) {
+            console.log('Discount code not found or inactive:', codeUpper);
             return (0, apiHelpers_1.sendError)(res, 404, 'Invalid or inactive discount code');
         }
         const discount = discountResult.rows[0];
         const now = new Date();
         // Check if discount is within validity period
         if (discount.valid_from && new Date(discount.valid_from) > now) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Discount code is not yet valid');
+            console.log('Discount code not yet valid:', { code: codeUpper, valid_from: discount.valid_from });
+            return (0, apiHelpers_1.sendError)(res, 400, `Discount code is not yet valid. Valid from ${new Date(discount.valid_from).toLocaleDateString()}`);
         }
         if (discount.valid_until && new Date(discount.valid_until) < now) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Discount code has expired');
+            console.log('Discount code expired:', { code: codeUpper, valid_until: discount.valid_until });
+            return (0, apiHelpers_1.sendError)(res, 400, `Discount code has expired. Expired on ${new Date(discount.valid_until).toLocaleDateString()}`);
         }
         // Check minimum purchase amount
-        if (discount.min_purchase && amount < parseFloat(discount.min_purchase)) {
-            return (0, apiHelpers_1.sendError)(res, 400, `Minimum purchase amount of ₹${discount.min_purchase} required`);
+        if (discount.min_purchase) {
+            const minPurchase = parseFloat(String(discount.min_purchase));
+            if (orderAmount < minPurchase) {
+                console.log('Minimum purchase not met:', { code: codeUpper, orderAmount, minPurchase });
+                return (0, apiHelpers_1.sendError)(res, 400, `Minimum purchase amount of ₹${minPurchase} required. Current order amount: ₹${orderAmount}`);
+            }
         }
         // Check usage limit
-        if (discount.usage_limit && discount.usage_count >= discount.usage_limit) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Discount code usage limit reached');
+        if (discount.usage_limit) {
+            const usageCount = parseInt(String(discount.usage_count || 0));
+            const usageLimit = parseInt(String(discount.usage_limit));
+            if (usageCount >= usageLimit) {
+                console.log('Discount usage limit reached:', { code: codeUpper, usageCount, usageLimit });
+                return (0, apiHelpers_1.sendError)(res, 400, `Discount code usage limit reached (${usageCount}/${usageLimit} uses)`);
+            }
         }
         // Calculate discount amount
         let discountAmount = 0;
+        const discountValue = parseFloat(String(discount.value || 0));
         if (discount.type === 'percentage') {
-            discountAmount = (amount * parseFloat(discount.value)) / 100;
+            discountAmount = (orderAmount * discountValue) / 100;
             // Apply max discount limit if set
-            if (discount.max_discount && discountAmount > parseFloat(discount.max_discount)) {
-                discountAmount = parseFloat(discount.max_discount);
+            if (discount.max_discount) {
+                const maxDiscount = parseFloat(String(discount.max_discount));
+                if (discountAmount > maxDiscount) {
+                    discountAmount = maxDiscount;
+                }
             }
         }
         else if (discount.type === 'fixed') {
-            discountAmount = parseFloat(discount.value);
+            discountAmount = discountValue;
             // Don't allow discount to exceed order amount
-            if (discountAmount > amount) {
-                discountAmount = amount;
+            if (discountAmount > orderAmount) {
+                discountAmount = orderAmount;
             }
         }
-        // Return discount details
-        (0, apiHelpers_1.sendSuccess)(res, {
+        else {
+            console.error('Invalid discount type:', { code: codeUpper, type: discount.type });
+            return (0, apiHelpers_1.sendError)(res, 400, `Invalid discount type: ${discount.type}`);
+        }
+        const response = {
             id: discount.id,
             code: discount.code,
             name: discount.name,
@@ -1630,10 +1664,17 @@ app.post('/api/discounts/apply', async (req, res) => {
             value: parseFloat(discount.value),
             discountAmount: Math.round(discountAmount * 100) / 100,
             maxDiscount: discount.max_discount ? parseFloat(discount.max_discount) : null
-        });
+        };
+        console.log('✅ Discount applied successfully:', { code: codeUpper, discountAmount: response.discountAmount });
+        // Return discount details
+        (0, apiHelpers_1.sendSuccess)(res, response);
     }
     catch (err) {
-        console.error('Error applying discount:', err);
+        console.error('Error applying discount:', {
+            error: err.message,
+            stack: err.stack,
+            body: req.body
+        });
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to apply discount code', err);
     }
 });
@@ -1671,50 +1712,71 @@ app.get('/api/analytics', async (req, res) => {
         // Get analytics data
         const ordersQuery = await pool.query(`
       SELECT 
-        COUNT(*) as total_orders,
-        SUM(total) as total_revenue,
-        COUNT(DISTINCT customer_email) as unique_customers
+        COUNT(*)::int as total_orders,
+        COALESCE(SUM(total), 0)::numeric as total_revenue,
+        COUNT(DISTINCT customer_email)::int as unique_customers
       FROM orders
       WHERE created_at >= $1
     `, [startDate]);
-        const pageViewsQuery = await pool.query(`
-      SELECT COUNT(*) as page_views
-      FROM analytics_data
-      WHERE metric_name = 'page_view' AND created_at >= $1
-    `, [startDate]);
+        // Safely query analytics_data table (might not exist)
+        let pageViews = 0;
+        try {
+            const pageViewsQuery = await pool.query(`
+        SELECT COUNT(*)::int as page_views
+        FROM analytics_data
+        WHERE metric_name = 'page_view' AND created_at >= $1
+      `, [startDate]);
+            pageViews = Number(pageViewsQuery.rows[0]?.page_views) || 0;
+        }
+        catch (analyticsErr) {
+            // analytics_data table might not exist, use 0
+            console.warn('analytics_data table query failed, using default:', analyticsErr);
+            pageViews = 0;
+        }
         // Get chart data grouped by date
         const chartDataQuery = await pool.query(`
       SELECT 
         DATE(created_at) as date,
-        COUNT(*) as orders,
-        SUM(total) as revenue
+        COUNT(*)::int as orders,
+        COALESCE(SUM(total), 0)::numeric as revenue
       FROM orders
       WHERE created_at >= $1
       GROUP BY DATE(created_at)
       ORDER BY date ASC
     `, [startDate]);
-        const orders = ordersQuery.rows[0];
-        const pageViews = pageViewsQuery.rows[0]?.page_views || 0;
+        const orders = ordersQuery.rows[0] || {};
+        const totalOrders = Number(orders.total_orders) || 0;
+        const totalRevenue = Number(orders.total_revenue) || 0;
+        const uniqueCustomers = Number(orders.unique_customers) || 0;
         (0, apiHelpers_1.sendSuccess)(res, {
             overview: {
-                sessions: Math.floor(parseInt(pageViews) * 0.6),
-                pageViews: parseInt(pageViews),
+                sessions: Math.floor(pageViews * 0.6),
+                pageViews: pageViews,
                 bounceRate: 45.2,
                 avgSessionDuration: '2:34',
                 conversionRate: 3.2,
-                revenue: parseFloat(orders.total_revenue || 0),
-                orders: parseInt(orders.total_orders || 0),
-                customers: parseInt(orders.unique_customers || 0)
+                revenue: totalRevenue,
+                orders: totalOrders,
+                customers: uniqueCustomers,
+                sessionsChange: 0,
+                pageViewsChange: 0,
+                bounceRateChange: 0,
+                avgSessionDurationChange: 0,
+                conversionRateChange: 0,
+                revenueChange: 0,
+                ordersChange: 0,
+                customersChange: 0
             },
             chartData: chartDataQuery.rows.map((row) => ({
                 date: row.date,
                 sessions: Math.floor(Math.random() * 200) + 100,
-                revenue: parseFloat(row.revenue || 0),
-                orders: parseInt(row.orders || 0)
+                revenue: Number(row.revenue) || 0,
+                orders: Number(row.orders) || 0
             }))
         });
     }
     catch (err) {
+        console.error('Analytics endpoint error:', err);
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to fetch analytics', err);
     }
 });

@@ -54,8 +54,18 @@ exports.createRazorpayOrder = createRazorpayOrder;
 const verifyRazorpayPayment = (pool) => async (req, res) => {
     try {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_number } = req.body;
+        // Validate all required fields
         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            console.error('Missing payment verification details:', {
+                has_order_id: !!razorpay_order_id,
+                has_payment_id: !!razorpay_payment_id,
+                has_signature: !!razorpay_signature
+            });
             return (0, apiHelpers_1.sendError)(res, 400, 'Payment verification details are required');
+        }
+        if (!order_number || typeof order_number !== 'string' || order_number.trim() === '') {
+            console.error('Missing or invalid order_number:', order_number);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Order number is required for payment verification');
         }
         // Verify the signature
         const generated_signature = crypto_1.default
@@ -64,19 +74,42 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             .digest('hex');
         const isAuthentic = generated_signature === razorpay_signature;
         if (!isAuthentic) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Payment verification failed');
+            console.error('Payment signature verification failed', {
+                order_id: razorpay_order_id,
+                order_number
+            });
+            return (0, apiHelpers_1.sendError)(res, 400, 'Payment verification failed: Invalid signature');
+        }
+        // Check if order exists before updating
+        const orderCheck = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+        if (orderCheck.rows.length === 0) {
+            console.error('Order not found for verification:', order_number);
+            return (0, apiHelpers_1.sendError)(res, 404, `Order not found: ${order_number}`);
         }
         // Update order status in database
-        await pool.query(`UPDATE orders SET status = $1, payment_status = $2, razorpay_order_id = $3, razorpay_payment_id = $4 WHERE order_number = $5`, ['confirmed', 'paid', razorpay_order_id, razorpay_payment_id, order_number]);
-        // Get the order details
+        const updateResult = await pool.query(`UPDATE orders SET status = $1, payment_status = $2, razorpay_order_id = $3, razorpay_payment_id = $4, updated_at = now() WHERE order_number = $5`, ['confirmed', 'paid', razorpay_order_id, razorpay_payment_id, order_number]);
+        if (updateResult.rowCount === 0) {
+            console.error('Failed to update order:', order_number);
+            return (0, apiHelpers_1.sendError)(res, 500, 'Failed to update order status');
+        }
+        // Get the updated order details
         const result = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+        if (result.rows.length === 0) {
+            console.error('Order not found after update:', order_number);
+            return (0, apiHelpers_1.sendError)(res, 500, 'Order verification completed but order not found');
+        }
+        console.log('✅ Payment verified successfully for order:', order_number);
         (0, apiHelpers_1.sendSuccess)(res, {
             verified: true,
             order: result.rows[0]
         });
     }
     catch (err) {
-        console.error('Error verifying Razorpay payment:', err);
+        console.error('Error verifying Razorpay payment:', {
+            error: err.message,
+            stack: err.stack,
+            body: req.body
+        });
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to verify payment', err);
     }
 };
