@@ -91,8 +91,16 @@ const app = (0, express_1.default)();
 // Register GET webhook route early (doesn't need pool, and must be before express.json())
 // This handles Meta's webhook verification
 app.get('/api/whatsapp/webhook', whatsappWebhookRoutes.verifyWebhook);
-// Now apply JSON parsing for all other routes (but webhook POST will use raw body)
-app.use(express_1.default.json());
+// Apply JSON parsing for all routes EXCEPT the WhatsApp webhook POST route
+// The webhook needs raw body for signature verification
+app.use((req, res, next) => {
+    // Skip JSON parsing for WhatsApp webhook POST route (needs raw body for signature verification)
+    if (req.path === '/api/whatsapp/webhook' && req.method === 'POST') {
+        return next();
+    }
+    // Apply JSON parsing for all other routes
+    express_1.default.json()(req, res, next);
+});
 // Serve uploaded files with CORS headers
 app.use('/uploads', (req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
