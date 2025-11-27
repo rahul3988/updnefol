@@ -294,21 +294,47 @@ async function processIncomingMessage(pool, message, metadata) {
         try {
             const customerName = `Customer_${fromPhone}`;
             const lastMessage = content.text || content.caption || `[${content.type}]`;
-            await pool.query(`
-        INSERT INTO whatsapp_chat_sessions (
-          customer_name, customer_phone, last_message, last_message_time, status, message_count
-        )
-        VALUES ($1, $2, $3, $4, 'active', 1)
-        ON CONFLICT (customer_phone) DO UPDATE SET
-          last_message = $3,
-          last_message_time = $4,
+            // First try to update existing session
+            const updateResult = await pool.query(`
+        UPDATE whatsapp_chat_sessions
+        SET 
+          last_message = $1,
+          last_message_time = $2,
           status = 'active',
-          message_count = whatsapp_chat_sessions.message_count + 1,
+          message_count = message_count + 1,
           updated_at = NOW()
-      `, [customerName, fromPhone, lastMessage, timestamp]);
+        WHERE customer_phone = $3
+      `, [lastMessage, timestamp, fromPhone]);
+            // If no rows were updated, insert a new session
+            if (updateResult.rowCount === 0) {
+                await pool.query(`
+          INSERT INTO whatsapp_chat_sessions (
+            customer_name, customer_phone, last_message, last_message_time, status, message_count
+          )
+          VALUES ($1, $2, $3, $4, 'active', 1)
+        `, [customerName, fromPhone, lastMessage, timestamp]);
+            }
         }
         catch (dbErr) {
             console.error('Failed to update chat session:', dbErr.message);
+            // If it's a unique constraint violation, try update again (race condition)
+            if (dbErr.code === '23505') {
+                try {
+                    await pool.query(`
+            UPDATE whatsapp_chat_sessions
+            SET 
+              last_message = $1,
+              last_message_time = $2,
+              status = 'active',
+              message_count = message_count + 1,
+              updated_at = NOW()
+            WHERE customer_phone = $3
+          `, [content.text || content.caption || `[${content.type}]`, timestamp, fromPhone]);
+                }
+                catch (retryErr) {
+                    console.error('Failed to update chat session on retry:', retryErr.message);
+                }
+            }
         }
         console.log(`✅ Processed incoming ${content.type} message from ${fromPhone}`);
     }

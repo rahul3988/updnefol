@@ -672,7 +672,7 @@ async function ensureSchema(pool) {
     create table if not exists whatsapp_chat_sessions (
       id serial primary key,
       customer_name text not null,
-      customer_phone text not null unique,
+      customer_phone text not null,
       customer_email text,
       status text not null default 'active',
       priority text not null default 'medium',
@@ -685,6 +685,18 @@ async function ensureSchema(pool) {
       created_at timestamptz default now(),
       updated_at timestamptz default now()
     );
+    
+    -- Ensure unique constraint on customer_phone exists (adds it if table exists but constraint doesn't)
+    do $$
+    begin
+      if not exists (
+        select 1 from pg_constraint 
+        where conname = 'whatsapp_chat_sessions_customer_phone_key'
+        and conrelid = 'whatsapp_chat_sessions'::regclass
+      ) then
+        alter table whatsapp_chat_sessions add constraint whatsapp_chat_sessions_customer_phone_key unique (customer_phone);
+      end if;
+    end $$;
     
     create table if not exists whatsapp_templates (
       id serial primary key,
