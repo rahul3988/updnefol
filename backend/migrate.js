@@ -125,6 +125,136 @@ async function runMigration() {
         created_at timestamptz default now(),
         unique(user_id, product_id)
       );
+      
+      -- WhatsApp Chat Sessions
+      CREATE TABLE IF NOT EXISTS whatsapp_chat_sessions (
+        id serial primary key,
+        customer_name text not null,
+        customer_phone text not null unique,
+        customer_email text,
+        status text not null default 'active',
+        priority text not null default 'medium',
+        assigned_agent text,
+        last_message text,
+        last_message_time timestamptz,
+        message_count integer default 0,
+        tags text[],
+        notes text,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      );
+      
+      -- WhatsApp Templates
+      CREATE TABLE IF NOT EXISTS whatsapp_templates (
+        id serial primary key,
+        name text not null,
+        category text not null,
+        content text not null,
+        variables text[],
+        is_approved boolean default false,
+        scheduled_date timestamptz,
+        scheduled_time text,
+        is_scheduled boolean default false,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      );
+      
+      -- WhatsApp Automations
+      CREATE TABLE IF NOT EXISTS whatsapp_automations (
+        id serial primary key,
+        name text not null,
+        trigger text not null,
+        condition text,
+        action text not null,
+        template_id integer references whatsapp_templates(id) on delete set null,
+        scheduled_date timestamptz,
+        scheduled_time text,
+        is_scheduled boolean default false,
+        is_active boolean default false,
+        messages_sent integer default 0,
+        response_rate numeric(5,2) default 0,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      );
+      
+      -- WhatsApp Scheduled Messages
+      CREATE TABLE IF NOT EXISTS whatsapp_scheduled_messages (
+        id serial primary key,
+        template_id integer references whatsapp_templates(id) on delete set null,
+        automation_id integer references whatsapp_automations(id) on delete set null,
+        phone text not null,
+        message text not null,
+        scheduled_at timestamptz not null,
+        status text default 'pending' check (status in ('pending', 'sent', 'failed', 'cancelled')),
+        sent_at timestamptz,
+        error_message text,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      );
+      
+      -- WhatsApp Configuration
+      CREATE TABLE IF NOT EXISTS whatsapp_config (
+        id serial primary key,
+        access_token text,
+        phone_number_id text,
+        business_account_id text,
+        webhook_url text,
+        verify_token text,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      );
+      
+      -- WhatsApp Incoming Messages Log
+      CREATE TABLE IF NOT EXISTS whatsapp_incoming_messages (
+        id serial primary key,
+        message_id text unique not null,
+        from_phone text not null,
+        to_phone text,
+        message_type text not null,
+        message_text text,
+        media_url text,
+        timestamp timestamptz not null,
+        status text default 'received' check (status in ('received', 'processed', 'replied')),
+        raw_payload jsonb,
+        created_at timestamptz default now()
+      );
+      
+      -- WhatsApp Message Status Tracking
+      CREATE TABLE IF NOT EXISTS whatsapp_message_status (
+        id serial primary key,
+        message_id text not null,
+        status text not null check (status in ('sent', 'delivered', 'read', 'failed')),
+        timestamp timestamptz not null,
+        error_code text,
+        error_message text,
+        created_at timestamptz default now()
+      );
+      
+      -- WhatsApp Subscriptions
+      CREATE TABLE IF NOT EXISTS whatsapp_subscriptions (
+        id serial primary key,
+        phone text not null unique,
+        name text,
+        subscribed_at timestamptz default now(),
+        unsubscribed_at timestamptz,
+        is_active boolean default true,
+        source text,
+        metadata jsonb,
+        verification_code text,
+        verified_at timestamptz
+      );
+      
+      -- WhatsApp Chat (legacy/alternative table)
+      CREATE TABLE IF NOT EXISTS whatsapp_chat (
+        id serial primary key,
+        phone_number text not null,
+        session_id text,
+        status text not null default 'active',
+        last_message text,
+        last_message_time timestamptz,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      );
     `);
     
     // Create indexes
@@ -137,6 +267,21 @@ async function runMigration() {
       CREATE INDEX IF NOT EXISTS idx_cms_pages_slug ON cms_pages(slug);
       CREATE INDEX IF NOT EXISTS idx_cms_sections_page_id ON cms_sections(page_id);
       CREATE INDEX IF NOT EXISTS idx_orders_customer_email ON orders(customer_email);
+      
+      -- WhatsApp indexes
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_chat_sessions_phone ON whatsapp_chat_sessions(customer_phone);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_chat_sessions_status ON whatsapp_chat_sessions(status);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_scheduled_messages_status ON whatsapp_scheduled_messages(status);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_scheduled_messages_scheduled_at ON whatsapp_scheduled_messages(scheduled_at);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_incoming_messages_from_phone ON whatsapp_incoming_messages(from_phone);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_incoming_messages_timestamp ON whatsapp_incoming_messages(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_incoming_messages_status ON whatsapp_incoming_messages(status);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_message_status_message_id ON whatsapp_message_status(message_id);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_message_status_status ON whatsapp_message_status(status);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_message_status_timestamp ON whatsapp_message_status(timestamp);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_subscriptions_phone ON whatsapp_subscriptions(phone);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_subscriptions_active ON whatsapp_subscriptions(is_active);
+      CREATE INDEX IF NOT EXISTS idx_whatsapp_chat_phone ON whatsapp_chat(phone_number);
     `);
     
     // Create trigger function
@@ -185,6 +330,36 @@ async function runMigration() {
       DROP TRIGGER IF EXISTS trg_cart_updated_at ON cart;
       CREATE TRIGGER trg_cart_updated_at 
         BEFORE UPDATE ON cart
+        FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+        
+      DROP TRIGGER IF EXISTS trg_whatsapp_chat_sessions_updated_at ON whatsapp_chat_sessions;
+      CREATE TRIGGER trg_whatsapp_chat_sessions_updated_at 
+        BEFORE UPDATE ON whatsapp_chat_sessions
+        FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+        
+      DROP TRIGGER IF EXISTS trg_whatsapp_templates_updated_at ON whatsapp_templates;
+      CREATE TRIGGER trg_whatsapp_templates_updated_at 
+        BEFORE UPDATE ON whatsapp_templates
+        FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+        
+      DROP TRIGGER IF EXISTS trg_whatsapp_automations_updated_at ON whatsapp_automations;
+      CREATE TRIGGER trg_whatsapp_automations_updated_at 
+        BEFORE UPDATE ON whatsapp_automations
+        FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+        
+      DROP TRIGGER IF EXISTS trg_whatsapp_scheduled_messages_updated_at ON whatsapp_scheduled_messages;
+      CREATE TRIGGER trg_whatsapp_scheduled_messages_updated_at 
+        BEFORE UPDATE ON whatsapp_scheduled_messages
+        FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+        
+      DROP TRIGGER IF EXISTS trg_whatsapp_config_updated_at ON whatsapp_config;
+      CREATE TRIGGER trg_whatsapp_config_updated_at 
+        BEFORE UPDATE ON whatsapp_config
+        FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
+        
+      DROP TRIGGER IF EXISTS trg_whatsapp_chat_updated_at ON whatsapp_chat;
+      CREATE TRIGGER trg_whatsapp_chat_updated_at 
+        BEFORE UPDATE ON whatsapp_chat
         FOR EACH ROW EXECUTE PROCEDURE set_updated_at();
     `);
     
