@@ -436,21 +436,46 @@ async function sendOTP(pool, req, res) {
             ];
             // Check if template has buttons that require parameters
             // URL buttons require a parameter (the URL)
+            // IMPORTANT: WhatsApp button URL parameters have a 15-character limit
             const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'https://nefol.com';
             const hasButton = process.env.WHATSAPP_TEMPLATE_HAS_BUTTON === 'true';
             if (hasButton) {
-                // Add button component with URL parameter
-                components.push({
-                    type: 'button',
-                    sub_type: 'url',
-                    index: 0,
-                    parameters: [
-                        {
-                            type: 'text',
-                            text: buttonUrl
+                // WhatsApp button URL parameters must be 15 characters or less
+                const maxButtonUrlLength = 15;
+                let buttonUrlParam = buttonUrl;
+                // If URL is too long, try to shorten it
+                if (buttonUrl.length > maxButtonUrlLength) {
+                    try {
+                        const urlObj = new URL(buttonUrl);
+                        // Use just domain (e.g., "nefol.com" = 9 chars)
+                        buttonUrlParam = urlObj.hostname.replace('www.', '');
+                        // If still too long, truncate
+                        if (buttonUrlParam.length > maxButtonUrlLength) {
+                            buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
                         }
-                    ]
-                });
+                    }
+                    catch {
+                        // If URL parsing fails, just truncate
+                        buttonUrlParam = buttonUrl.substring(0, maxButtonUrlLength);
+                    }
+                }
+                // Only add button if we have a valid parameter (15 chars or less)
+                if (buttonUrlParam.length <= maxButtonUrlLength) {
+                    components.push({
+                        type: 'button',
+                        sub_type: 'url',
+                        index: 0,
+                        parameters: [
+                            {
+                                type: 'text',
+                                text: buttonUrlParam
+                            }
+                        ]
+                    });
+                }
+                else {
+                    console.warn('⚠️  Button URL too long, skipping button parameter. URL:', buttonUrl);
+                }
             }
             requestBody = {
                 messaging_product: 'whatsapp',
@@ -718,21 +743,46 @@ async function sendOTPLogin(pool, req, res) {
             ];
             // Check if template has buttons that require parameters
             // URL buttons require a parameter (the URL)
+            // IMPORTANT: WhatsApp button URL parameters have a 15-character limit
             const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'https://nefol.com';
             const hasButton = process.env.WHATSAPP_TEMPLATE_HAS_BUTTON === 'true';
             if (hasButton) {
-                // Add button component with URL parameter
-                components.push({
-                    type: 'button',
-                    sub_type: 'url',
-                    index: 0,
-                    parameters: [
-                        {
-                            type: 'text',
-                            text: buttonUrl
+                // WhatsApp button URL parameters must be 15 characters or less
+                const maxButtonUrlLength = 15;
+                let buttonUrlParam = buttonUrl;
+                // If URL is too long, try to shorten it
+                if (buttonUrl.length > maxButtonUrlLength) {
+                    try {
+                        const urlObj = new URL(buttonUrl);
+                        // Use just domain (e.g., "nefol.com" = 9 chars)
+                        buttonUrlParam = urlObj.hostname.replace('www.', '');
+                        // If still too long, truncate
+                        if (buttonUrlParam.length > maxButtonUrlLength) {
+                            buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
                         }
-                    ]
-                });
+                    }
+                    catch {
+                        // If URL parsing fails, just truncate
+                        buttonUrlParam = buttonUrl.substring(0, maxButtonUrlLength);
+                    }
+                }
+                // Only add button if we have a valid parameter (15 chars or less)
+                if (buttonUrlParam.length <= maxButtonUrlLength) {
+                    components.push({
+                        type: 'button',
+                        sub_type: 'url',
+                        index: 0,
+                        parameters: [
+                            {
+                                type: 'text',
+                                text: buttonUrlParam
+                            }
+                        ]
+                    });
+                }
+                else {
+                    console.warn('⚠️  Button URL too long, skipping button parameter. URL:', buttonUrl);
+                }
             }
             requestBody = {
                 messaging_product: 'whatsapp',

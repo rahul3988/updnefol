@@ -19,11 +19,25 @@ function getBaseUrl() {
 }
 async function getToken(pool) {
     try {
-        const { rows } = await pool.query('select api_key, api_secret from shiprocket_config where is_active = true order by updated_at desc, id desc limit 1');
+        // First check if table exists
+        const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'shiprocket_config'
+      )
+    `);
+        if (!tableCheck.rows[0]?.exists) {
+            console.error('❌ Shiprocket config table does not exist. Please run database migrations.');
+            return null;
+        }
+        const { rows } = await pool.query('SELECT api_key, api_secret FROM shiprocket_config WHERE is_active = true ORDER BY updated_at DESC, id DESC LIMIT 1');
         const apiKey = rows[0]?.api_key; // This stores email
         const apiSecret = rows[0]?.api_secret; // This stores password
         if (!apiKey || !apiSecret) {
-            console.error('Shiprocket credentials not found in database');
+            console.error('❌ Shiprocket credentials not found in database');
+            console.error('   Please configure Shiprocket credentials via /api/shiprocket/config endpoint');
+            console.error('   Or use the save-shiprocket-credentials.js script');
             return null;
         }
         const resp = await fetch(`${getBaseUrl()}/auth/login`, {
@@ -33,14 +47,23 @@ async function getToken(pool) {
         });
         if (!resp.ok) {
             const errorData = await resp.json().catch(() => ({}));
-            console.error('Shiprocket authentication failed:', errorData);
+            console.error('❌ Shiprocket authentication failed:', errorData);
+            console.error('   Status:', resp.status);
+            console.error('   Please verify your credentials are correct');
             return null;
         }
         const data = await resp.json();
-        return data?.token || null;
+        if (!data?.token) {
+            console.error('❌ Shiprocket authentication succeeded but no token received');
+            return null;
+        }
+        return data.token;
     }
     catch (err) {
-        console.error('Error getting Shiprocket token:', err);
+        console.error('❌ Error getting Shiprocket token:', err.message);
+        if (err.code === '42P01') {
+            console.error('   Database table "shiprocket_config" does not exist. Please run migrations.');
+        }
         return null;
     }
 }
