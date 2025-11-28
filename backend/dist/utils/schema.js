@@ -93,23 +93,45 @@ async function ensureSchema(pool) {
       updated_at timestamptz default now()
     );
     
+    -- Ensure password reset columns exist (migration for existing tables)
+    do $$ 
+    begin
+      if not exists (
+        select 1 from information_schema.columns 
+        where table_name = 'users' and column_name = 'reset_password_token'
+      ) then
+        alter table users add column reset_password_token text;
+      end if;
+      
+      if not exists (
+        select 1 from information_schema.columns 
+        where table_name = 'users' and column_name = 'reset_password_expires'
+      ) then
+        alter table users add column reset_password_expires timestamptz;
+      end if;
+    end $$;
+    
     -- Add indexes for password reset fields
     create index if not exists idx_users_reset_token on users(reset_password_token) where reset_password_token is not null;
     create index if not exists idx_users_reset_expires on users(reset_password_expires) where reset_password_expires is not null;
     
-    -- OTP table for WhatsApp authentication
-    create table if not exists otp_verifications (
+    -- OTP table for WhatsApp/Email authentication (matches otpService.ts)
+    create table if not exists otps (
       id serial primary key,
-      phone text not null,
-      otp text not null,
-      expires_at timestamptz not null,
-      verified boolean default false,
+      phone_or_email text not null,
+      otp_hash text not null,
       attempts integer default 0,
+      expires_at timestamptz not null,
+      used boolean default false,
       created_at timestamptz default now()
     );
     
-    create index if not exists idx_otp_phone on otp_verifications(phone);
-    create index if not exists idx_otp_expires on otp_verifications(expires_at);
+    create index if not exists idx_otps_phone_email on otps(phone_or_email);
+    create index if not exists idx_otps_expires on otps(expires_at);
+    create index if not exists idx_otps_used on otps(used) where used = false;
+    
+    -- Legacy OTP table (otp_verifications) - keep for backward compatibility if it exists
+    -- The new system uses 'otps' table above
     
     create table if not exists videos (
       id serial primary key,
@@ -219,6 +241,23 @@ async function ensureSchema(pool) {
     begin
       if not exists (select 1 from information_schema.columns where table_name = 'orders' and column_name = 'billing_address') then
         alter table orders add column billing_address jsonb;
+      end if;
+    end $$;
+    
+    -- Add tracking column to orders table for WhatsApp notifications
+    do $$ 
+    begin
+      if not exists (select 1 from information_schema.columns where table_name = 'orders' and column_name = 'tracking') then
+        alter table orders add column tracking text;
+      end if;
+    end $$;
+    
+    -- Add user_id column to orders table for WhatsApp notifications (if not exists)
+    do $$ 
+    begin
+      if not exists (select 1 from information_schema.columns where table_name = 'orders' and column_name = 'user_id') then
+        alter table orders add column user_id integer references users(id) on delete set null;
+        create index if not exists idx_orders_user_id on orders(user_id);
       end if;
     end $$;
     

@@ -596,7 +596,8 @@ class WhatsAppService {
             let orderAmount = '₹0';
             if (this.pool) {
                 try {
-                    const orderResult = await this.pool.query('SELECT total FROM orders WHERE id = $1 OR order_id = $1', [orderId]);
+                    // Try to match by order_number (string) or id (integer)
+                    const orderResult = await this.pool.query('SELECT total FROM orders WHERE order_number = $1 OR id::text = $1', [orderId]);
                     if (orderResult.rows.length > 0) {
                         orderAmount = `₹${orderResult.rows[0].total || 0}`;
                     }
