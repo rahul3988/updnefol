@@ -476,41 +476,58 @@ async function sendOTP(pool, req, res) {
             // Check if template has buttons that require parameters
             // URL buttons require a parameter (the URL)
             // IMPORTANT: WhatsApp button URL parameters have a 15-character limit
-            const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'https://nefol.com';
+            // IMPORTANT: Button parameters must be plain text (domain only), NOT full URLs
+            const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'thenefol.com';
             const hasButton = process.env.WHATSAPP_TEMPLATE_HAS_BUTTON === 'true';
             if (hasButton) {
                 // WhatsApp button URL parameters must be 15 characters or less
+                // Must be plain text (domain name only), NOT a full URL
                 const maxButtonUrlLength = 15;
                 let buttonUrlParam = buttonUrl;
-                // If URL is too long, try to shorten it
-                if (buttonUrl.length > maxButtonUrlLength) {
-                    try {
-                        const urlObj = new URL(buttonUrl);
-                        // Use just domain (e.g., "nefol.com" = 9 chars)
+                // Remove protocol if present (https://, http://)
+                buttonUrlParam = buttonUrlParam.replace(/^https?:\/\//i, '');
+                // Remove www. prefix if present
+                buttonUrlParam = buttonUrlParam.replace(/^www\./i, '');
+                // Remove trailing slash if present
+                buttonUrlParam = buttonUrlParam.replace(/\/$/, '');
+                // Extract just the domain (remove path if present)
+                try {
+                    // If it looks like a URL, extract hostname
+                    if (buttonUrlParam.includes('/')) {
+                        const urlObj = new URL('https://' + buttonUrlParam);
                         buttonUrlParam = urlObj.hostname.replace('www.', '');
-                        // If still too long, truncate
-                        if (buttonUrlParam.length > maxButtonUrlLength) {
-                            buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
-                        }
-                    }
-                    catch {
-                        // If URL parsing fails, just truncate
-                        buttonUrlParam = buttonUrl.substring(0, maxButtonUrlLength);
                     }
                 }
-                // Only add button if we have a valid parameter (15 chars or less)
-                if (buttonUrlParam.length <= maxButtonUrlLength) {
-                    components.push({
-                        type: 'button',
-                        sub_type: 'url',
-                        index: 0,
-                        parameters: [
-                            {
-                                type: 'text',
-                                text: buttonUrlParam
-                            }
-                        ]
-                    });
+                catch {
+                    // If URL parsing fails, try to extract domain manually
+                    const parts = buttonUrlParam.split('/');
+                    buttonUrlParam = parts[0].replace('www.', '');
+                }
+                // Truncate if still too long
+                if (buttonUrlParam.length > maxButtonUrlLength) {
+                    buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
+                }
+                // Only add button if we have a valid parameter (15 chars or less, plain text)
+                if (buttonUrlParam.length > 0 && buttonUrlParam.length <= maxButtonUrlLength) {
+                    // Ensure it's plain text (no protocol, no slashes, no special chars)
+                    const cleanParam = buttonUrlParam.replace(/[^a-zA-Z0-9.-]/g, '');
+                    if (cleanParam.length > 0 && cleanParam.length <= maxButtonUrlLength) {
+                        components.push({
+                            type: 'button',
+                            sub_type: 'url',
+                            index: 0,
+                            parameters: [
+                                {
+                                    type: 'text',
+                                    text: cleanParam
+                                }
+                            ]
+                        });
+                        console.log('✅ Button parameter set:', cleanParam);
+                    }
+                    else {
+                        console.warn('⚠️  Button URL parameter invalid after cleaning, skipping. Original:', buttonUrl);
+                    }
                 }
                 else {
                     console.warn('⚠️  Button URL too long, skipping button parameter. URL:', buttonUrl);
@@ -784,41 +801,58 @@ async function sendOTPLogin(pool, req, res) {
             // Check if template has buttons that require parameters
             // URL buttons require a parameter (the URL)
             // IMPORTANT: WhatsApp button URL parameters have a 15-character limit
-            const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'https://nefol.com';
+            // IMPORTANT: Button parameters must be plain text (domain only), NOT full URLs
+            const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'thenefol.com';
             const hasButton = process.env.WHATSAPP_TEMPLATE_HAS_BUTTON === 'true';
             if (hasButton) {
                 // WhatsApp button URL parameters must be 15 characters or less
+                // Must be plain text (domain name only), NOT a full URL
                 const maxButtonUrlLength = 15;
                 let buttonUrlParam = buttonUrl;
-                // If URL is too long, try to shorten it
-                if (buttonUrl.length > maxButtonUrlLength) {
-                    try {
-                        const urlObj = new URL(buttonUrl);
-                        // Use just domain (e.g., "nefol.com" = 9 chars)
+                // Remove protocol if present (https://, http://)
+                buttonUrlParam = buttonUrlParam.replace(/^https?:\/\//i, '');
+                // Remove www. prefix if present
+                buttonUrlParam = buttonUrlParam.replace(/^www\./i, '');
+                // Remove trailing slash if present
+                buttonUrlParam = buttonUrlParam.replace(/\/$/, '');
+                // Extract just the domain (remove path if present)
+                try {
+                    // If it looks like a URL, extract hostname
+                    if (buttonUrlParam.includes('/')) {
+                        const urlObj = new URL('https://' + buttonUrlParam);
                         buttonUrlParam = urlObj.hostname.replace('www.', '');
-                        // If still too long, truncate
-                        if (buttonUrlParam.length > maxButtonUrlLength) {
-                            buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
-                        }
-                    }
-                    catch {
-                        // If URL parsing fails, just truncate
-                        buttonUrlParam = buttonUrl.substring(0, maxButtonUrlLength);
                     }
                 }
-                // Only add button if we have a valid parameter (15 chars or less)
-                if (buttonUrlParam.length <= maxButtonUrlLength) {
-                    components.push({
-                        type: 'button',
-                        sub_type: 'url',
-                        index: 0,
-                        parameters: [
-                            {
-                                type: 'text',
-                                text: buttonUrlParam
-                            }
-                        ]
-                    });
+                catch {
+                    // If URL parsing fails, try to extract domain manually
+                    const parts = buttonUrlParam.split('/');
+                    buttonUrlParam = parts[0].replace('www.', '');
+                }
+                // Truncate if still too long
+                if (buttonUrlParam.length > maxButtonUrlLength) {
+                    buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
+                }
+                // Only add button if we have a valid parameter (15 chars or less, plain text)
+                if (buttonUrlParam.length > 0 && buttonUrlParam.length <= maxButtonUrlLength) {
+                    // Ensure it's plain text (no protocol, no slashes, no special chars)
+                    const cleanParam = buttonUrlParam.replace(/[^a-zA-Z0-9.-]/g, '');
+                    if (cleanParam.length > 0 && cleanParam.length <= maxButtonUrlLength) {
+                        components.push({
+                            type: 'button',
+                            sub_type: 'url',
+                            index: 0,
+                            parameters: [
+                                {
+                                    type: 'text',
+                                    text: cleanParam
+                                }
+                            ]
+                        });
+                        console.log('✅ Button parameter set:', cleanParam);
+                    }
+                    else {
+                        console.warn('⚠️  Button URL parameter invalid after cleaning, skipping. Original:', buttonUrl);
+                    }
                 }
                 else {
                     console.warn('⚠️  Button URL too long, skipping button parameter. URL:', buttonUrl);
