@@ -74,7 +74,90 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         const baseUrl = (0, whatsapp_1.getWhatsAppApiUrl)();
         const accessToken = (0, whatsapp_1.getAccessToken)();
         const endpoint = `${baseUrl}/${phoneNumberId}/messages`;
-        // Convert variables to template components
+        // Special handling for nefol_otp_auth - Meta's "Copy Code" OTP format
+        // This template uses zero variables and zero buttons - pure template only
+        if (templateName === 'nefol_otp_auth') {
+            const requestBody = {
+                messaging_product: 'whatsapp',
+                to: normalizedPhone,
+                type: 'template',
+                template: {
+                    name: templateName,
+                    language: {
+                        code: languageCode
+                    }
+                }
+            };
+            // Retry logic: 1 retry for transient 5xx errors
+            let lastError = null;
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    if (attempt > 0) {
+                        console.log(`🔄 Retrying WhatsApp template send (attempt ${attempt + 1})...`);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    const responseData = await response.json();
+                    if (!response.ok) {
+                        const errorCode = responseData.error?.code || response.status;
+                        const errorMessage = responseData.error?.message || `HTTP ${response.status}`;
+                        const isTemplateError = errorCode === 132001 ||
+                            errorCode === 132018 ||
+                            errorCode === 132000 ||
+                            errorMessage.toLowerCase().includes('template') ||
+                            errorMessage.toLowerCase().includes('parameter') ||
+                            errorMessage.toLowerCase().includes('translation');
+                        const isPermanent = response.status >= 400 && response.status < 500;
+                        if (!isPermanent && response.status >= 500 && attempt < 1) {
+                            lastError = { code: errorCode, message: errorMessage, isTemplateError, isPermanent };
+                            continue;
+                        }
+                        console.error(`❌ WhatsApp Template Error [${errorCode}]:`, errorMessage);
+                        console.error('   Template:', templateName);
+                        console.error('   Phone:', normalizedPhone);
+                        return {
+                            ok: false,
+                            error: {
+                                code: errorCode,
+                                message: errorMessage,
+                                isTemplateError,
+                                isPermanent
+                            }
+                        };
+                    }
+                    const messageId = responseData.messages?.[0]?.id;
+                    console.log(`✅ WhatsApp template sent: ${templateName} to ${normalizedPhone}, Message ID: ${messageId}`);
+                    return {
+                        ok: true,
+                        providerId: messageId
+                    };
+                }
+                catch (error) {
+                    lastError = error;
+                    if (attempt < 1 && (error.message?.includes('fetch') || error.message?.includes('network'))) {
+                        continue;
+                    }
+                    throw error;
+                }
+            }
+            return {
+                ok: false,
+                error: {
+                    code: lastError?.code || 500,
+                    message: lastError?.message || 'Failed to send template after retries',
+                    isTemplateError: false,
+                    isPermanent: false
+                }
+            };
+        }
+        // Convert variables to template components for all other templates
         const bodyParameters = variables.map(variable => {
             if (variable.type === 'text') {
                 return { type: 'text', text: variable.text || '' };
@@ -111,18 +194,7 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             }
             return { type: 'text', text: '' };
         });
-        // Authentication templates should NOT have buttons, headers, or footers
-        // List of authentication templates that must only have body parameters
-        const authTemplates = [
-            'nefol_otp_auth',
-            'nefol_reset_password',
-            'nefol_signup_success',
-            'nefol_login_alert',
-            'nefol_greet_1',
-            'nefol_welcome_1'
-        ];
-        const isAuthTemplate = authTemplates.includes(templateName);
-        // Build components array - only body parameters for authentication templates
+        // Build components array for other templates
         const components = [];
         if (bodyParameters.length > 0) {
             components.push({
@@ -130,8 +202,6 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                 parameters: bodyParameters
             });
         }
-        // DO NOT add buttons, headers, or footers for authentication templates
-        // These templates should only have body parameters according to Meta's requirements
         const requestBody = {
             messaging_product: 'whatsapp',
             to: normalizedPhone,
