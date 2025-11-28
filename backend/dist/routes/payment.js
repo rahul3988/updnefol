@@ -41,22 +41,37 @@ const createRazorpayOrder = (pool) => async (req, res) => {
             console.error('Amount below minimum:', amountNum);
             return (0, apiHelpers_1.sendError)(res, 400, 'Amount must be at least ₹1');
         }
+        // Validate maximum amount (Razorpay maximum is typically 99,99,999.99 INR)
+        if (amountNum > 9999999.99) {
+            console.error('Amount exceeds maximum:', amountNum);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Amount exceeds maximum limit');
+        }
         // Check if Razorpay credentials are configured
         if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
             console.error('Razorpay credentials not configured');
             return (0, apiHelpers_1.sendError)(res, 500, 'Payment gateway not configured');
         }
+        // Validate receipt field (Razorpay has a 40 character limit)
+        const receipt = order_number.length > 40 ? order_number.substring(0, 40) : order_number;
+        // Calculate amount in paise (must be integer, no decimals)
+        const amountInPaise = Math.round(amountNum * 100);
+        // Ensure amount is at least 100 paise (1 INR)
+        if (amountInPaise < 100) {
+            console.error('Amount in paise below minimum:', amountInPaise);
+            return (0, apiHelpers_1.sendError)(res, 400, 'Amount must be at least ₹1');
+        }
         console.log('Creating Razorpay order:', {
             order_number,
             amount: amountNum,
             currency,
-            amount_in_paise: Math.round(amountNum * 100)
+            amount_in_paise: amountInPaise,
+            receipt
         });
         // Create order in Razorpay
         const options = {
-            amount: Math.round(amountNum * 100), // Convert to paise
+            amount: amountInPaise, // Amount in paise (integer)
             currency: currency,
-            receipt: order_number,
+            receipt: receipt,
             notes: {
                 order_number,
                 customer_name: customer_name || undefined,
@@ -64,7 +79,43 @@ const createRazorpayOrder = (pool) => async (req, res) => {
                 customer_phone: customer_phone || undefined
             }
         };
-        const order = await razorpay.orders.create(options);
+        let order;
+        try {
+            order = await razorpay.orders.create(options);
+        }
+        catch (razorpayErr) {
+            console.error('Razorpay API error:', {
+                error: razorpayErr.message,
+                statusCode: razorpayErr.statusCode,
+                error_description: razorpayErr.description || razorpayErr.error?.description,
+                error_code: razorpayErr.error?.code,
+                field: razorpayErr.field,
+                source: razorpayErr.source,
+                step: razorpayErr.step,
+                reason: razorpayErr.reason,
+                metadata: razorpayErr.metadata,
+                options: {
+                    ...options,
+                    amount: amountInPaise,
+                    receipt: receipt
+                }
+            });
+            // Provide more specific error messages
+            let errorMessage = 'Failed to create Razorpay order';
+            if (razorpayErr.statusCode === 401) {
+                errorMessage = 'Invalid Razorpay credentials. Please check your API keys.';
+            }
+            else if (razorpayErr.statusCode === 400) {
+                errorMessage = razorpayErr.description || razorpayErr.error?.description || 'Invalid payment request';
+            }
+            else if (razorpayErr.statusCode === 500) {
+                errorMessage = 'Razorpay service error. Please try again later.';
+            }
+            else if (razorpayErr.message) {
+                errorMessage = razorpayErr.message;
+            }
+            return (0, apiHelpers_1.sendError)(res, razorpayErr.statusCode || 500, errorMessage, razorpayErr);
+        }
         console.log('✅ Razorpay order created successfully:', {
             order_id: order.id,
             order_number,
@@ -103,6 +154,16 @@ exports.createRazorpayOrder = createRazorpayOrder;
 // Verify Razorpay payment
 const verifyRazorpayPayment = (pool) => async (req, res) => {
     try {
+        // Validate pool is available
+        if (!pool) {
+            console.error('Database pool not available for payment verification');
+            return (0, apiHelpers_1.sendError)(res, 500, 'Database connection not available');
+        }
+        // Validate Razorpay credentials
+        if (!RAZORPAY_KEY_SECRET || RAZORPAY_KEY_SECRET.trim() === '') {
+            console.error('RAZORPAY_KEY_SECRET not configured');
+            return (0, apiHelpers_1.sendError)(res, 500, 'Payment gateway not configured');
+        }
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_number } = req.body;
         // Validate all required fields
         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -126,24 +187,59 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
         if (!isAuthentic) {
             console.error('Payment signature verification failed', {
                 order_id: razorpay_order_id,
-                order_number
+                order_number,
+                generated_sig: generated_signature.substring(0, 10) + '...',
+                received_sig: razorpay_signature.substring(0, 10) + '...'
             });
             return (0, apiHelpers_1.sendError)(res, 400, 'Payment verification failed: Invalid signature');
         }
         // Check if order exists before updating
-        const orderCheck = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+        let orderCheck;
+        try {
+            orderCheck = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+        }
+        catch (dbErr) {
+            console.error('Database error while checking order:', {
+                error: dbErr.message,
+                code: dbErr.code,
+                order_number
+            });
+            return (0, apiHelpers_1.sendError)(res, 500, 'Database error while verifying order', dbErr);
+        }
         if (orderCheck.rows.length === 0) {
             console.error('Order not found for verification:', order_number);
             return (0, apiHelpers_1.sendError)(res, 404, `Order not found: ${order_number}`);
         }
         // Update order status in database
-        const updateResult = await pool.query(`UPDATE orders SET status = $1, payment_status = $2, razorpay_order_id = $3, razorpay_payment_id = $4, updated_at = now() WHERE order_number = $5`, ['confirmed', 'paid', razorpay_order_id, razorpay_payment_id, order_number]);
+        let updateResult;
+        try {
+            updateResult = await pool.query(`UPDATE orders SET status = $1, payment_status = $2, razorpay_order_id = $3, razorpay_payment_id = $4, updated_at = now() WHERE order_number = $5`, ['confirmed', 'paid', razorpay_order_id, razorpay_payment_id, order_number]);
+        }
+        catch (dbErr) {
+            console.error('Database error while updating order:', {
+                error: dbErr.message,
+                code: dbErr.code,
+                order_number
+            });
+            return (0, apiHelpers_1.sendError)(res, 500, 'Database error while updating order status', dbErr);
+        }
         if (updateResult.rowCount === 0) {
-            console.error('Failed to update order:', order_number);
+            console.error('Failed to update order (no rows affected):', order_number);
             return (0, apiHelpers_1.sendError)(res, 500, 'Failed to update order status');
         }
         // Get the updated order details
-        const result = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+        let result;
+        try {
+            result = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+        }
+        catch (dbErr) {
+            console.error('Database error while fetching updated order:', {
+                error: dbErr.message,
+                code: dbErr.code,
+                order_number
+            });
+            return (0, apiHelpers_1.sendError)(res, 500, 'Database error while fetching order details', dbErr);
+        }
         if (result.rows.length === 0) {
             console.error('Order not found after update:', order_number);
             return (0, apiHelpers_1.sendError)(res, 500, 'Order verification completed but order not found');
@@ -158,7 +254,9 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
         console.error('Error verifying Razorpay payment:', {
             error: err.message,
             stack: err.stack,
-            body: req.body
+            body: req.body,
+            error_code: err.code,
+            error_name: err.name
         });
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to verify payment', err);
     }
