@@ -356,8 +356,8 @@ async function register(pool, req, res) {
         `, [user.id]);
                 // Create default address
                 await pool.query(`
-          INSERT INTO user_addresses (user_id, name, phone, street, city, state, zip, country, is_default)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+          INSERT INTO user_addresses (user_id, name, phone, street, city, state, zip, country, address_type, is_default)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
         `, [
                     user.id,
                     name,
@@ -366,7 +366,8 @@ async function register(pool, req, res) {
                     req.body.address.city || '',
                     req.body.address.state || '',
                     req.body.address.zip || '',
-                    'India'
+                    'India',
+                    'house'
                 ]);
                 console.log('✅ Default address created for user:', user.email);
             }
@@ -662,8 +663,8 @@ async function verifyOTPSignup(pool, req, res) {
         `, [user.id]);
                 // Create default address
                 await pool.query(`
-          INSERT INTO user_addresses (user_id, name, phone, street, city, state, zip, country, is_default)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+          INSERT INTO user_addresses (user_id, name, phone, street, city, state, zip, country, address_type, is_default)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
         `, [
                     user.id,
                     name,
@@ -672,7 +673,8 @@ async function verifyOTPSignup(pool, req, res) {
                     address.city || '',
                     address.state || '',
                     address.zip || '',
-                    'India'
+                    'India',
+                    'house'
                 ]);
                 console.log('✅ Default address created for OTP signup user:', normalizedPhone);
             }
