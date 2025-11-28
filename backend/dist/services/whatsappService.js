@@ -80,7 +80,7 @@ class WhatsAppService {
     /**
      * Send OTP via WhatsApp using nefol_otp_auth template
      * Template: nefol_otp_auth
-     * Variables: [otp, expiryMinutes]
+     * Variables: [otp] - Only 1 parameter (OTP code)
      *
      * @param {string} phone - Recipient phone number
      * @param {string} otp - 6-digit OTP code
@@ -89,12 +89,11 @@ class WhatsAppService {
      */
     async sendOTPWhatsApp(phone, otp, name = '') {
         try {
-            const otpLength = parseInt(process.env.OTP_LENGTH || '6');
             const otpTtl = parseInt(process.env.OTP_TTL_SECONDS || '300');
             const expiryMinutes = Math.ceil(otpTtl / 60);
+            // Template only expects 1 parameter (OTP code)
             const variables = [
-                { type: 'text', text: otp },
-                { type: 'text', text: expiryMinutes.toString() }
+                { type: 'text', text: otp }
             ];
             const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', variables);
             if (result.ok) {
