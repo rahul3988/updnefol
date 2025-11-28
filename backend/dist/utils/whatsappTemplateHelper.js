@@ -76,6 +76,8 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         const endpoint = `${baseUrl}/${phoneNumberId}/messages`;
         // Special handling for nefol_otp_auth - Meta's "Copy Code" OTP format
         // This template uses zero variables and zero buttons - pure template only
+        // Meta automatically generates OTP and enables zero-tap auto-fill
+        // NO components field is included - Meta handles everything automatically
         if (templateName === 'nefol_otp_auth') {
             const requestBody = {
                 messaging_product: 'whatsapp',
@@ -86,6 +88,7 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                     language: {
                         code: languageCode
                     }
+                    // No components field - Meta generates OTP automatically
                 }
             };
             // Retry logic: 1 retry for transient 5xx errors
