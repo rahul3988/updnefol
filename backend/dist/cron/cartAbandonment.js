@@ -33,7 +33,7 @@ function startCartAbandonmentCron(pool) {
             -- Check if user has placed an order in the last hour
             SELECT 1 
             FROM orders o 
-            WHERE (o.customer_email = u.email OR o.customer_phone = u.phone)
+            WHERE (o.customer_email = u.email OR (o.shipping_address->>'phone') = u.phone)
               AND o.created_at > c.updated_at
           )
         GROUP BY c.user_id, u.email, u.name, u.phone, c.updated_at
