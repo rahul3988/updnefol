@@ -297,7 +297,7 @@ class WhatsAppService {
     /**
      * Send password reset code via WhatsApp using nefol_reset_password template
      * Template: nefol_reset_password
-     * Variables: [resetCode, expiryMinutes]
+     * Variables: [resetCode] - Only 1 parameter (reset code)
      *
      * @param {string} phone - Recipient phone number
      * @param {string} code - Reset code (6-digit OTP)

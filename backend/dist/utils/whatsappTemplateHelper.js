@@ -111,6 +111,27 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             }
             return { type: 'text', text: '' };
         });
+        // Authentication templates should NOT have buttons, headers, or footers
+        // List of authentication templates that must only have body parameters
+        const authTemplates = [
+            'nefol_otp_auth',
+            'nefol_reset_password',
+            'nefol_signup_success',
+            'nefol_login_alert',
+            'nefol_greet_1',
+            'nefol_welcome_1'
+        ];
+        const isAuthTemplate = authTemplates.includes(templateName);
+        // Build components array - only body parameters for authentication templates
+        const components = [];
+        if (bodyParameters.length > 0) {
+            components.push({
+                type: 'body',
+                parameters: bodyParameters
+            });
+        }
+        // DO NOT add buttons, headers, or footers for authentication templates
+        // These templates should only have body parameters according to Meta's requirements
         const requestBody = {
             messaging_product: 'whatsapp',
             to: normalizedPhone,
@@ -120,12 +141,7 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                 language: {
                     code: languageCode
                 },
-                components: bodyParameters.length > 0 ? [
-                    {
-                        type: 'body',
-                        parameters: bodyParameters
-                    }
-                ] : []
+                components: components
             }
         };
         // Retry logic: 1 retry for transient 5xx errors
