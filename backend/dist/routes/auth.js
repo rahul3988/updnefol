@@ -18,7 +18,8 @@ const crypto_1 = __importDefault(require("crypto"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const apiHelpers_1 = require("../utils/apiHelpers");
 const emailService_1 = require("../services/emailService");
-const SALT_ROUNDS = 10;
+const whatsappService_1 = require("../services/whatsappService");
+const SALT_ROUNDS = 12; // Updated to 12 as per requirements
 const TOKEN_BYTES = 32;
 const TOKEN_EXPIRY_MINUTES = 15;
 /**
@@ -37,7 +38,7 @@ function hashToken(token) {
     return crypto_1.default.createHash('sha256').update(token).digest('hex');
 }
 /**
- * Hash a password using bcrypt
+ * Hash a password using bcrypt with saltRounds=12
  * @param {string} password - Plain text password
  * @returns {Promise<string>} Hashed password
  */
@@ -78,10 +79,13 @@ function validatePasswordStrength(password) {
     return null;
 }
 /**
- * Forgot Password - Request password reset
+ * Request Password Reset - Supports both email and phone
  *
- * POST /api/auth/forgot-password
- * Body: { "email": "user@example.com" }
+ * POST /api/auth/request-reset
+ * Body: { "email": "user@example.com" } or { "phone": "91XXXXXXXXXX" }
+ *
+ * If phone: sends 6-digit OTP via WhatsApp using nefol_reset_password template
+ * If email: sends reset link via email
  *
  * @param {Pool} pool - Database pool
  * @param {Request} req - Express request
@@ -89,56 +93,96 @@ function validatePasswordStrength(password) {
  */
 async function forgotPassword(pool, req, res) {
     try {
-        const { email } = req.body;
-        console.log('🔐 Forgot password request:', { email });
-        // Validate required fields
-        const validationError = (0, apiHelpers_1.validateRequired)(req.body, ['email']);
-        if (validationError) {
-            return (0, apiHelpers_1.sendError)(res, 400, validationError);
+        const { email, phone } = req.body;
+        console.log('🔐 Password reset request:', {
+            email: email ? email.substring(0, 3) + '***' : undefined,
+            phone: phone ? '***' : undefined
+        });
+        if (!email && !phone) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Either email or phone is required');
         }
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid email format');
-        }
-        // Find user by email
-        const { rows } = await pool.query('SELECT id, name, email FROM users WHERE LOWER(email) = LOWER($1)', [email]);
-        // Always return success to prevent email enumeration
-        // But only send email if user exists
-        if (rows.length > 0) {
-            const user = rows[0];
-            // Generate secure reset token
-            const rawToken = generateResetToken();
-            const hashedToken = hashToken(rawToken);
-            // Set expiry to 15 minutes from now
-            const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
-            // Save hashed token and expiry to database
-            await pool.query(`UPDATE users 
-         SET reset_password_token = $1, 
-             reset_password_expires = $2,
-             updated_at = NOW()
-         WHERE id = $3`, [hashedToken, expiresAt, user.id]);
-            // Build reset link
-            const frontendUrl = process.env.USER_PANEL_URL || process.env.CLIENT_ORIGIN || 'https://thenefol.com';
-            const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
-            // Send password reset email
+        // Always return success to prevent enumeration
+        let userFound = false;
+        if (phone) {
+            // Phone-based reset: Generate 6-digit OTP and send via WhatsApp
             try {
-                await (0, emailService_1.sendPasswordResetEmail)(email, user.name || 'User', resetLink);
-                console.log(`✅ Password reset email sent to: ${email}`);
+                const normalizedPhone = phone.replace(/[\s+\-()]/g, '');
+                // Find user by phone
+                const userResult = await pool.query('SELECT id, name, phone FROM users WHERE phone = $1', [normalizedPhone]);
+                if (userResult.rows.length > 0) {
+                    userFound = true;
+                    const user = userResult.rows[0];
+                    const whatsappService = new whatsappService_1.WhatsAppService(pool);
+                    // Generate 6-digit OTP
+                    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+                    // Send via WhatsApp template
+                    const whatsappResult = await whatsappService.sendResetPasswordWhatsApp(normalizedPhone, resetCode, user.name || 'User');
+                    if (whatsappResult.ok) {
+                        // Store OTP in otps table (will be verified later)
+                        const otpHash = crypto_1.default.createHash('sha256').update(resetCode).digest('hex');
+                        const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
+                        // Delete existing unused OTPs for this phone
+                        await pool.query('DELETE FROM otps WHERE phone_or_email = $1 AND used = FALSE', [normalizedPhone]);
+                        // Insert new OTP
+                        await pool.query(`INSERT INTO otps (phone_or_email, otp_hash, expires_at)
+               VALUES ($1, $2, $3)`, [normalizedPhone, otpHash, expiresAt]);
+                        console.log(`✅ Password reset OTP sent via WhatsApp to: ${normalizedPhone}`);
+                    }
+                    else {
+                        // Fallback to email if WhatsApp fails
+                        if (userResult.rows[0].email) {
+                            const rawToken = generateResetToken();
+                            const hashedToken = hashToken(rawToken);
+                            const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
+                            await pool.query(`UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3`, [hashedToken, expiresAt, user.id]);
+                            const frontendUrl = process.env.FRONTEND_URL || process.env.USER_PANEL_URL || 'https://thenefol.com';
+                            const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(userResult.rows[0].email)}`;
+                            await (0, emailService_1.sendPasswordResetEmail)(userResult.rows[0].email, user.name || 'User', resetLink);
+                            console.log(`✅ Password reset email sent (WhatsApp fallback)`);
+                        }
+                    }
+                }
+            }
+            catch (phoneErr) {
+                console.error('❌ Error processing phone reset:', phoneErr);
+            }
+        }
+        else if (email) {
+            // Email-based reset: Generate secure token and send link
+            try {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    return (0, apiHelpers_1.sendError)(res, 400, 'Invalid email format');
+                }
+                const userResult = await pool.query('SELECT id, name, email FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+                if (userResult.rows.length > 0) {
+                    userFound = true;
+                    const user = userResult.rows[0];
+                    // Generate secure reset token
+                    const rawToken = generateResetToken();
+                    const hashedToken = hashToken(rawToken);
+                    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
+                    // Save hashed token and expiry
+                    await pool.query(`UPDATE users 
+             SET reset_password_token = $1, 
+                 reset_password_expires = $2,
+                 updated_at = NOW()
+             WHERE id = $3`, [hashedToken, expiresAt, user.id]);
+                    // Build reset link
+                    const frontendUrl = process.env.FRONTEND_URL || process.env.USER_PANEL_URL || 'https://thenefol.com';
+                    const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+                    // Send password reset email
+                    await (0, emailService_1.sendPasswordResetEmail)(email, user.name || 'User', resetLink);
+                    console.log(`✅ Password reset email sent to: ${email}`);
+                }
             }
             catch (emailErr) {
-                console.error('❌ Failed to send password reset email:', emailErr);
-                // Don't fail the request if email fails - token is still saved
+                console.error('❌ Error processing email reset:', emailErr);
             }
-            // Log password reset request
-            console.log(`✅ Password reset token generated for user: ${user.id} (${email})`);
         }
-        else {
-            console.log(`⚠️  Password reset requested for non-existent email: ${email}`);
-        }
-        // Always return success to prevent email enumeration attacks
+        // Always return success to prevent enumeration
         (0, apiHelpers_1.sendSuccess)(res, {
-            message: 'If an account with that email exists, a password reset link has been sent.'
+            message: 'If an account exists, a password reset code has been sent.'
         });
     }
     catch (err) {
@@ -206,7 +250,7 @@ async function resetPassword(pool, req, res) {
             console.error('❌ Reset token expired for user:', user.id);
             return (0, apiHelpers_1.sendError)(res, 400, 'Reset token has expired. Please request a new one.');
         }
-        // Hash the new password
+        // Hash the new password with bcrypt saltRounds=12
         const hashedPassword = await hashPassword(newPassword);
         // Update password and clear reset token fields
         await pool.query(`UPDATE users 

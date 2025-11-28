@@ -11,45 +11,57 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getWhatsAppApiUrl = getWhatsAppApiUrl;
 exports.getPhoneNumberId = getPhoneNumberId;
 exports.getAccessToken = getAccessToken;
+exports.getPhoneNumberIdFromEnv = getPhoneNumberIdFromEnv;
 exports.getWhatsAppHeaders = getWhatsAppHeaders;
 exports.whatsappRequest = whatsappRequest;
 exports.verifyWebhookSignature = verifyWebhookSignature;
 /**
  * Get the base API URL for WhatsApp Business Cloud API
  * Defaults to v17.0 if not specified in environment
+ * Supports META_WA_API_URL
  *
  * @returns {string} Base API URL
  */
 function getWhatsAppApiUrl() {
-    const apiUrl = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v17.0';
+    const apiUrl = process.env.META_WA_API_URL || process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v17.0';
     return apiUrl;
 }
 /**
  * Get the phone number ID from environment
+ * Supports META_WA_NUMBER_ID for compatibility
  *
  * @returns {string} Phone number ID
  * @throws {Error} If phone number ID is not configured
  */
 function getPhoneNumberId() {
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
-    if (!phoneNumberId) {
-        throw new Error('WHATSAPP_PHONE_NUMBER_ID is not configured in environment variables');
-    }
-    return phoneNumberId;
+    return getPhoneNumberIdFromEnv();
 }
 /**
  * Get the access token from environment
- * Uses WHATSAPP_TOKEN or WHATSAPP_ACCESS_TOKEN for backward compatibility
+ * Uses META_WA_TOKEN, WHATSAPP_TOKEN, or WHATSAPP_ACCESS_TOKEN for backward compatibility
  *
  * @returns {string} Access token
  * @throws {Error} If access token is not configured
  */
 function getAccessToken() {
-    const token = process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN;
+    const token = process.env.META_WA_TOKEN || process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN;
     if (!token) {
-        throw new Error('WHATSAPP_TOKEN or WHATSAPP_ACCESS_TOKEN is not configured in environment variables');
+        throw new Error('META_WA_TOKEN, WHATSAPP_TOKEN, or WHATSAPP_ACCESS_TOKEN is not configured in environment variables');
     }
     return token;
+}
+/**
+ * Get phone number ID from environment (supports META_WA_NUMBER_ID)
+ *
+ * @returns {string} Phone number ID
+ * @throws {Error} If phone number ID is not configured
+ */
+function getPhoneNumberIdFromEnv() {
+    const phoneNumberId = process.env.META_WA_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    if (!phoneNumberId) {
+        throw new Error('META_WA_NUMBER_ID or WHATSAPP_PHONE_NUMBER_ID is not configured');
+    }
+    return phoneNumberId;
 }
 /**
  * Get headers for WhatsApp API requests

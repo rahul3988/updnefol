@@ -45,6 +45,7 @@ exports.WhatsAppService = void 0;
 exports.createWhatsAppService = createWhatsAppService;
 const whatsapp_1 = require("../config/whatsapp");
 const whatsappUtils_1 = require("../utils/whatsappUtils");
+const whatsappTemplateHelper_1 = require("../utils/whatsappTemplateHelper");
 /**
  * WhatsApp Service Class
  * Provides all WhatsApp Business API functionality
@@ -77,29 +78,60 @@ class WhatsAppService {
         }
     }
     /**
-     * Send OTP via WhatsApp
-     * Format: "Your verification code is {otp}. Valid for 10 minutes. Do NOT share."
+     * Send OTP via WhatsApp using nefol_otp_auth template
+     * Template: nefol_otp_auth
+     * Variables: [otp, expiryMinutes]
+     *
+     * @param {string} phone - Recipient phone number
+     * @param {string} otp - 6-digit OTP code
+     * @param {string} name - User name (optional)
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendOTPWhatsApp(phone, otp, name = '') {
+        try {
+            const otpLength = parseInt(process.env.OTP_LENGTH || '6');
+            const otpTtl = parseInt(process.env.OTP_TTL_SECONDS || '300');
+            const expiryMinutes = Math.ceil(otpTtl / 60);
+            const variables = [
+                { type: 'text', text: otp },
+                { type: 'text', text: expiryMinutes.toString() }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text if template error
+            if (result.error?.isTemplateError) {
+                console.warn('⚠️  Template error, falling back to plain text for OTP');
+                const fallbackResult = await this.sendText(phone, `Your verification code is ${otp}. Valid for ${expiryMinutes} minutes. Do NOT share.`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true,
+                    error: fallbackResult.success ? undefined : { message: fallbackResult.error }
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendOTPWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send OTP via WhatsApp (legacy method, uses template)
      *
      * @param {string} to - Recipient phone number
      * @param {string} otp - 6-digit OTP code
      * @returns {Promise<{success: boolean, data?: any, error?: string}>}
-     *
-     * @example
-     * const service = new WhatsAppService(pool)
-     * const result = await service.sendOTP('919876543210', '123456')
      */
     async sendOTP(to, otp) {
-        try {
-            const message = `Your verification code is ${otp}. Valid for 10 minutes. Do NOT share.`;
-            return await this.sendText(to, message);
-        }
-        catch (error) {
-            console.error('Error in sendOTP:', error);
-            return {
-                success: false,
-                error: error.message || 'Failed to send OTP via WhatsApp'
-            };
-        }
+        const result = await this.sendOTPWhatsApp(to, otp);
+        return {
+            success: result.ok,
+            data: result.providerId ? { messageId: result.providerId } : undefined,
+            error: result.error?.message
+        };
     }
     /**
      * Send a template message via WhatsApp
@@ -271,6 +303,403 @@ class WhatsAppService {
         catch (error) {
             console.error('Error in handleStatusUpdate:', error);
             throw error;
+        }
+    }
+    /**
+     * Send password reset code via WhatsApp using nefol_reset_password template
+     * Template: nefol_reset_password
+     * Variables: [resetCode, expiryMinutes]
+     *
+     * @param {string} phone - Recipient phone number
+     * @param {string} code - Reset code (6-digit OTP)
+     * @param {string} name - User name (optional)
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendResetPasswordWhatsApp(phone, code, name = '') {
+        try {
+            const expiryMinutes = 15;
+            const variables = [
+                { type: 'text', text: code },
+                { type: 'text', text: expiryMinutes.toString() }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_reset_password', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                console.warn('⚠️  Template error, falling back to plain text for reset password');
+                const fallbackResult = await this.sendText(phone, `Your password reset code is ${code}. Valid for ${expiryMinutes} minutes.`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true,
+                    error: fallbackResult.success ? undefined : { message: fallbackResult.error }
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendResetPasswordWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send signup success message via WhatsApp using nefol_signup_success template
+     * Template: nefol_signup_success
+     * Variables: [name]
+     *
+     * @param {any} user - User object with name, phone, email
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendSignupWhatsApp(user) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_signup_success', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Welcome ${user.name || 'User'}! Your account has been created successfully.`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendSignupWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send login alert via WhatsApp using nefol_login_alert template
+     * Template: nefol_login_alert
+     * Variables: [name, deviceInfo, timestamp]
+     *
+     * @param {any} user - User object with name, phone
+     * @param {string} deviceInfo - Device/browser information
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendLoginAlertWhatsApp(user, deviceInfo = 'Unknown device') {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+            const variables = [
+                { type: 'text', text: user.name || 'User' },
+                { type: 'text', text: deviceInfo },
+                { type: 'text', text: timestamp }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_login_alert', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Login alert: ${user.name} logged in from ${deviceInfo} at ${timestamp}`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendLoginAlertWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send cart recovery message via WhatsApp using nefol_cart_recover template
+     * Template: nefol_cart_recover
+     * Variables: [name, cartUrl]
+     *
+     * @param {any} user - User object with name, phone
+     * @param {string} cartUrl - URL to view cart
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendCartRecoveryWhatsApp(user, cartUrl) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const frontendUrl = process.env.FRONTEND_URL || process.env.USER_PANEL_URL || 'https://thenefol.com';
+            const fullCartUrl = cartUrl.startsWith('http') ? cartUrl : `${frontendUrl}${cartUrl.startsWith('/') ? '' : '/'}${cartUrl}`;
+            const variables = [
+                { type: 'text', text: user.name || 'User' },
+                { type: 'text', text: fullCartUrl }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_cart_recover', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, you have items in your cart. Complete your purchase: ${fullCartUrl}`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendCartRecoveryWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send order shipped notification via WhatsApp using nefol_order_shipped template
+     * Template: nefol_order_shipped
+     * Variables: [name, orderId, trackingUrl]
+     *
+     * @param {any} user - User object with name, phone
+     * @param {string} orderId - Order ID
+     * @param {string} tracking - Tracking URL or number
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendOrderShippedWhatsApp(user, orderId, tracking) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' },
+                { type: 'text', text: orderId },
+                { type: 'text', text: tracking }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_order_shipped', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, your order #${orderId} has been shipped! Track: ${tracking}`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendOrderShippedWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send order delivered notification via WhatsApp using nefol_order_delivered template
+     * Template: nefol_order_delivered
+     * Variables: [name, orderId]
+     *
+     * @param {any} user - User object with name, phone
+     * @param {string} orderId - Order ID
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendOrderDeliveredWhatsApp(user, orderId) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' },
+                { type: 'text', text: orderId }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_order_delivered', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, your order #${orderId} has been delivered! Thank you for shopping with us.`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendOrderDeliveredWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send refund notification via WhatsApp using nefol_refund_1 template
+     * Template: nefol_refund_1
+     * Variables: [name, orderId, amount]
+     *
+     * @param {any} user - User object with name, phone
+     * @param {string} orderId - Order ID
+     * @param {number} amount - Refund amount
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendRefundWhatsApp(user, orderId, amount) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' },
+                { type: 'text', text: orderId },
+                { type: 'text', text: `₹${amount}` }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_refund_1', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, refund of ₹${amount} for order #${orderId} has been processed.`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendRefundWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send COD verification request via WhatsApp using nefol_cod_verify template
+     * Template: nefol_cod_verify
+     * Variables: [name, orderId, amount]
+     *
+     * @param {any} user - User object with name, phone
+     * @param {string} orderId - Order ID
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendCODVerifyWhatsApp(user, orderId) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            // Get order amount from database if pool available
+            let orderAmount = '₹0';
+            if (this.pool) {
+                try {
+                    const orderResult = await this.pool.query('SELECT total FROM orders WHERE id = $1 OR order_id = $1', [orderId]);
+                    if (orderResult.rows.length > 0) {
+                        orderAmount = `₹${orderResult.rows[0].total || 0}`;
+                    }
+                }
+                catch (dbErr) {
+                    console.error('Failed to fetch order amount:', dbErr);
+                }
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' },
+                { type: 'text', text: orderId },
+                { type: 'text', text: orderAmount }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_cod_verify', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, please confirm your COD order #${orderId} for ${orderAmount}. Reply YES to confirm or NO to cancel.`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendCODVerifyWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send greeting message via WhatsApp using nefol_greet_1 template
+     * Template: nefol_greet_1
+     * Variables: [name]
+     *
+     * @param {any} user - User object with name, phone
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendGreetingWhatsApp(user) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_greet_1', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Hello ${user.name}! Welcome to Thenefol. How can we help you today?`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendGreetingWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
+     * Send welcome message via WhatsApp using nefol_welcome_1 template
+     * Template: nefol_welcome_1
+     * Variables: [name]
+     *
+     * @param {any} user - User object with name, phone
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendWelcomeWhatsApp(user) {
+        try {
+            if (!user.phone) {
+                return { ok: false, error: { message: 'User phone number not available' } };
+            }
+            const variables = [
+                { type: 'text', text: user.name || 'User' }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_welcome_1', variables);
+            if (result.ok) {
+                return { ok: true, providerId: result.providerId };
+            }
+            // Fallback to plain text
+            if (result.error?.isTemplateError) {
+                const fallbackResult = await this.sendText(user.phone, `Welcome ${user.name}! Thank you for joining Thenefol. We're excited to have you!`);
+                return {
+                    ok: fallbackResult.success,
+                    providerId: fallbackResult.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: result.error };
+        }
+        catch (error) {
+            console.error('Error in sendWelcomeWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
         }
     }
 }

@@ -4,12 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startCartAbandonmentCron = startCartAbandonmentCron;
-// Cart Abandonment Cron Job - Runs every hour
+// Cart Abandonment Cron Job - Runs every 10 minutes (as per requirements)
 const node_cron_1 = __importDefault(require("node-cron"));
 const emailService_1 = require("../services/emailService");
+const whatsappService_1 = require("../services/whatsappService");
 function startCartAbandonmentCron(pool) {
-    // Run every hour at minute 0 (e.g., 1:00, 2:00, 3:00, etc.)
-    node_cron_1.default.schedule('0 * * * *', async () => {
+    // Run every 10 minutes (as per requirements)
+    node_cron_1.default.schedule('*/10 * * * *', async () => {
         try {
             console.log('🛒 Running cart abandonment check...');
             // Get carts that are older than 1 hour and haven't been checked out
@@ -22,19 +23,20 @@ function startCartAbandonmentCron(pool) {
           c.user_id,
           u.email,
           u.name,
+          u.phone,
           c.updated_at as cart_updated_at
         FROM cart c
         INNER JOIN users u ON c.user_id = u.id
         WHERE c.updated_at < $1
-          AND u.email IS NOT NULL
+          AND (u.email IS NOT NULL OR u.phone IS NOT NULL)
           AND NOT EXISTS (
             -- Check if user has placed an order in the last hour
             SELECT 1 
             FROM orders o 
-            WHERE o.customer_email = u.email 
+            WHERE (o.customer_email = u.email OR o.customer_phone = u.phone)
               AND o.created_at > c.updated_at
           )
-        GROUP BY c.user_id, u.email, u.name, c.updated_at
+        GROUP BY c.user_id, u.email, u.name, u.phone, c.updated_at
       `, [oneHourAgo]);
             console.log(`📧 Found ${abandonedCarts.rows.length} abandoned carts`);
             for (const cart of abandonedCarts.rows) {
@@ -66,9 +68,30 @@ function startCartAbandonmentCron(pool) {
                 AND sent_at > NOW() - INTERVAL '24 hours'
             `, [cart.user_id, cart.cart_updated_at]);
                         if (emailSent.rows.length === 0) {
-                            // Send abandonment email
-                            await (0, emailService_1.sendCartAbandonmentEmail)(cart.email, cart.name || 'Customer', cartItems.rows);
-                            // Record that we sent the email
+                            const frontendUrl = process.env.FRONTEND_URL || process.env.USER_PANEL_URL || 'https://thenefol.com';
+                            const cartUrl = `${frontendUrl}/#/user/checkout`;
+                            // Send WhatsApp cart recovery (primary)
+                            if (cart.phone) {
+                                try {
+                                    const whatsappService = new whatsappService_1.WhatsAppService(pool);
+                                    await whatsappService.sendCartRecoveryWhatsApp({ name: cart.name || 'Customer', phone: cart.phone }, cartUrl);
+                                    console.log(`✅ Cart recovery WhatsApp sent to user ${cart.user_id} (${cart.phone})`);
+                                }
+                                catch (waErr) {
+                                    console.error(`❌ Failed to send WhatsApp cart recovery:`, waErr);
+                                }
+                            }
+                            // Send abandonment email (fallback or if no phone)
+                            if (cart.email) {
+                                try {
+                                    await (0, emailService_1.sendCartAbandonmentEmail)(cart.email, cart.name || 'Customer', cartItems.rows);
+                                    console.log(`✅ Cart abandonment email sent to user ${cart.user_id} (${cart.email})`);
+                                }
+                                catch (emailErr) {
+                                    console.error(`❌ Failed to send cart abandonment email:`, emailErr);
+                                }
+                            }
+                            // Record that we sent the reminder
                             await pool.query(`
                 CREATE TABLE IF NOT EXISTS cart_abandonment_emails (
                   id SERIAL PRIMARY KEY,
@@ -81,10 +104,9 @@ function startCartAbandonmentCron(pool) {
                 INSERT INTO cart_abandonment_emails (user_id, cart_updated_at)
                 VALUES ($1, $2)
               `, [cart.user_id, cart.cart_updated_at]);
-                            console.log(`✅ Cart abandonment email sent to user ${cart.user_id} (${cart.email})`);
                         }
                         else {
-                            console.log(`⏭️  Skipping user ${cart.user_id} - email already sent in last 24 hours`);
+                            console.log(`⏭️  Skipping user ${cart.user_id} - reminder already sent in last 24 hours`);
                         }
                     }
                 }
@@ -99,5 +121,5 @@ function startCartAbandonmentCron(pool) {
             console.error('❌ Error in cart abandonment cron job:', error);
         }
     });
-    console.log('✅ Cart abandonment cron job started (runs every hour)');
+    console.log('✅ Cart abandonment cron job started (runs every 10 minutes)');
 }

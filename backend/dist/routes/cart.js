@@ -25,6 +25,7 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const apiHelpers_1 = require("../utils/apiHelpers");
 const userActivitySchema_1 = require("../utils/userActivitySchema");
 const emailService_1 = require("../services/emailService");
+const whatsappService_1 = require("../services/whatsappService");
 const SALT_ROUNDS = 10;
 // Optimized GET /api/cart
 async function getCart(pool, req, res) {
@@ -323,6 +324,24 @@ async function register(pool, req, res) {
         (0, emailService_1.sendWelcomeEmail)(user.email, user.name).catch(err => {
             console.error('Failed to send welcome email:', err);
         });
+        // Send WhatsApp signup success notification (async, don't wait)
+        if (user.phone) {
+            const whatsappService = new whatsappService_1.WhatsAppService(pool);
+            whatsappService.sendSignupWhatsApp({
+                name: user.name,
+                phone: user.phone,
+                email: user.email
+            }).catch(err => {
+                console.error('Failed to send WhatsApp signup notification:', err);
+            });
+            // Also send welcome WhatsApp message
+            whatsappService.sendWelcomeWhatsApp({
+                name: user.name,
+                phone: user.phone
+            }).catch(err => {
+                console.error('Failed to send WhatsApp welcome message:', err);
+            });
+        }
         // If address is provided, create a default address
         if (req.body.address && req.body.address.street) {
             try {

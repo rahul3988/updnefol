@@ -1,0 +1,217 @@
+"use strict";
+/**
+ * Low-level WhatsApp Template Helper
+ *
+ * Provides core template sending functionality with retry logic,
+ * error handling, and E.164 phone number validation.
+ *
+ * @module utils/whatsappTemplateHelper
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.normalizePhoneNumber = normalizePhoneNumber;
+exports.sendWhatsAppTemplate = sendWhatsAppTemplate;
+const whatsapp_1 = require("../config/whatsapp");
+/**
+ * Normalize phone number to E.164 format
+ * Accepts formats like: 919876543210, +919876543210, 91 98765 43210
+ * Returns: 919876543210 (without +)
+ *
+ * @param {string} phone - Phone number in various formats
+ * @returns {string} Normalized phone number
+ */
+function normalizePhoneNumber(phone) {
+    // Remove all spaces, dashes, parentheses, and plus signs
+    let normalized = phone.replace(/[\s+\-()]/g, '');
+    // If starts with +, remove it
+    if (normalized.startsWith('+')) {
+        normalized = normalized.substring(1);
+    }
+    // If Indian number starts with 0, remove it (e.g., 09876543210 -> 9876543210)
+    if (normalized.startsWith('0') && normalized.length === 11) {
+        normalized = normalized.substring(1);
+    }
+    // If Indian number without country code, add 91
+    if (normalized.length === 10 && !normalized.startsWith('91')) {
+        normalized = '91' + normalized;
+    }
+    return normalized;
+}
+/**
+ * Send WhatsApp template message with retry logic
+ *
+ * Template: nefol_otp_auth, nefol_reset_password, nefol_order_delivered, etc.
+ * Variables are converted to components.body.parameters in order
+ *
+ * @param {string} to - Recipient phone number (will be normalized to E.164)
+ * @param {string} templateName - Template name (e.g., 'nefol_otp_auth')
+ * @param {TemplateVariable[]} variables - Template variables in order
+ * @param {string} languageCode - Language code (default: 'en_US')
+ * @returns {Promise<SendTemplateResult>} Result with provider message ID or error
+ *
+ * @example
+ * await sendWhatsAppTemplate('919876543210', 'nefol_otp_auth', [
+ *   { type: 'text', text: '123456' },
+ *   { type: 'text', text: '5' }
+ * ])
+ */
+async function sendWhatsAppTemplate(to, templateName, variables = [], languageCode = 'en_US') {
+    try {
+        // Normalize phone number
+        const normalizedPhone = normalizePhoneNumber(to);
+        // Validate phone format (should be digits only, 10-15 digits)
+        if (!/^\d{10,15}$/.test(normalizedPhone)) {
+            return {
+                ok: false,
+                error: {
+                    code: 400,
+                    message: `Invalid phone number format: ${to}`,
+                    isTemplateError: false,
+                    isPermanent: true
+                }
+            };
+        }
+        const phoneNumberId = (0, whatsapp_1.getPhoneNumberIdFromEnv)();
+        const baseUrl = (0, whatsapp_1.getWhatsAppApiUrl)();
+        const accessToken = (0, whatsapp_1.getAccessToken)();
+        const endpoint = `${baseUrl}/${phoneNumberId}/messages`;
+        // Convert variables to template components
+        const bodyParameters = variables.map(variable => {
+            if (variable.type === 'text') {
+                return { type: 'text', text: variable.text || '' };
+            }
+            else if (variable.type === 'currency') {
+                return {
+                    type: 'currency',
+                    currency: variable.currency
+                };
+            }
+            else if (variable.type === 'date_time') {
+                return {
+                    type: 'date_time',
+                    date_time: variable.date_time
+                };
+            }
+            else if (variable.type === 'image') {
+                return {
+                    type: 'image',
+                    image: variable.image
+                };
+            }
+            else if (variable.type === 'document') {
+                return {
+                    type: 'document',
+                    document: variable.document
+                };
+            }
+            else if (variable.type === 'video') {
+                return {
+                    type: 'video',
+                    video: variable.video
+                };
+            }
+            return { type: 'text', text: '' };
+        });
+        const requestBody = {
+            messaging_product: 'whatsapp',
+            to: normalizedPhone,
+            type: 'template',
+            template: {
+                name: templateName,
+                language: {
+                    code: languageCode
+                },
+                components: bodyParameters.length > 0 ? [
+                    {
+                        type: 'body',
+                        parameters: bodyParameters
+                    }
+                ] : []
+            }
+        };
+        // Retry logic: 1 retry for transient 5xx errors
+        let lastError = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                if (attempt > 0) {
+                    console.log(`🔄 Retrying WhatsApp template send (attempt ${attempt + 1})...`);
+                    // Wait 1 second before retry
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                const responseData = await response.json();
+                if (!response.ok) {
+                    const errorCode = responseData.error?.code || response.status;
+                    const errorMessage = responseData.error?.message || `HTTP ${response.status}`;
+                    // Check if it's a template error (132018 = template parameter issue)
+                    const isTemplateError = errorCode === 132018 ||
+                        errorMessage.includes('template') ||
+                        errorMessage.includes('parameter');
+                    // Check if it's a permanent error (4xx) vs transient (5xx)
+                    const isPermanent = response.status >= 400 && response.status < 500;
+                    // If transient 5xx error and not last attempt, retry
+                    if (!isPermanent && response.status >= 500 && attempt < 1) {
+                        lastError = { code: errorCode, message: errorMessage, isTemplateError, isPermanent };
+                        continue;
+                    }
+                    console.error(`❌ WhatsApp Template Error [${errorCode}]:`, errorMessage);
+                    console.error('   Template:', templateName);
+                    console.error('   Phone:', normalizedPhone);
+                    console.error('   Response:', JSON.stringify(responseData, null, 2));
+                    return {
+                        ok: false,
+                        error: {
+                            code: errorCode,
+                            message: errorMessage,
+                            isTemplateError,
+                            isPermanent
+                        }
+                    };
+                }
+                // Success
+                const messageId = responseData.messages?.[0]?.id;
+                console.log(`✅ WhatsApp template sent: ${templateName} to ${normalizedPhone}, Message ID: ${messageId}`);
+                return {
+                    ok: true,
+                    providerId: messageId
+                };
+            }
+            catch (error) {
+                lastError = error;
+                // If network error and not last attempt, retry
+                if (attempt < 1 && (error.message?.includes('fetch') || error.message?.includes('network'))) {
+                    continue;
+                }
+                throw error;
+            }
+        }
+        // If we get here, all retries failed
+        return {
+            ok: false,
+            error: {
+                code: lastError?.code || 500,
+                message: lastError?.message || 'Failed to send template after retries',
+                isTemplateError: false,
+                isPermanent: false
+            }
+        };
+    }
+    catch (error) {
+        console.error('❌ WhatsApp template send failed:', error);
+        return {
+            ok: false,
+            error: {
+                code: 500,
+                message: error.message || 'Unknown error',
+                isTemplateError: false,
+                isPermanent: false
+            }
+        };
+    }
+}

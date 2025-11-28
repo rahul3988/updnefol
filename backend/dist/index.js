@@ -91,6 +91,7 @@ const apiManager_1 = require("./routes/apiManager");
 const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const emailService_1 = require("./services/emailService");
 const cartAbandonment_1 = require("./cron/cartAbandonment");
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const app = (0, express_1.default)();
 // Register GET webhook route early (doesn't need pool, and must be before express.json())
 // This handles Meta's webhook verification
@@ -920,12 +921,27 @@ app.delete('/api/cart', apiHelpers_1.authenticateToken, (req, res) => cartRoutes
 app.post('/api/auth/login', (req, res) => cartRoutes.login(pool, req, res));
 app.post('/api/auth/register', (req, res) => cartRoutes.register(pool, req, res));
 app.post('/api/auth/signup', (req, res) => cartRoutes.register(pool, req, res));
-// Password Reset Routes
-app.post('/api/auth/forgot-password', (req, res) => authRoutes.forgotPassword(pool, req, res));
+// Rate limiting for OTP and password reset endpoints
+const otpRateLimit = (0, express_rate_limit_1.default)({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: parseInt(process.env.RATE_LIMIT_OTP_PER_HOUR || '5'),
+    message: { error: 'Too many requests. Please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => {
+        // Skip rate limiting for internal/admin requests (optional)
+        return false;
+    }
+});
+// Password Reset Routes (with rate limiting)
+app.post('/api/auth/request-reset', otpRateLimit, (req, res) => authRoutes.forgotPassword(pool, req, res));
+app.post('/api/auth/forgot-password', otpRateLimit, (req, res) => authRoutes.forgotPassword(pool, req, res)); // Legacy route
 app.post('/api/auth/reset-password', (req, res) => authRoutes.resetPassword(pool, req, res));
-// OTP Routes (WhatsApp + Email)
-app.post('/api/otp/send', (req, res) => otpRoutes.sendOTP(pool, req, res));
-app.post('/api/otp/verify', (req, res) => otpRoutes.verifyOTP(pool, req, res));
+// OTP Routes (WhatsApp + Email) with rate limiting
+app.post('/api/auth/send-otp', otpRateLimit, (req, res) => otpRoutes.sendOTP(pool, req, res));
+app.post('/api/auth/verify-otp', (req, res) => otpRoutes.verifyOTP(pool, req, res));
+app.post('/api/otp/send', otpRateLimit, (req, res) => otpRoutes.sendOTP(pool, req, res)); // Legacy route
+app.post('/api/otp/verify', (req, res) => otpRoutes.verifyOTP(pool, req, res)); // Legacy route
 // Legacy OTP routes (backward compatibility - using cart routes)
 app.post('/api/auth/send-otp', (req, res) => cartRoutes.sendOTP(pool, req, res));
 app.post('/api/auth/verify-otp-signup', (req, res) => cartRoutes.verifyOTPSignup(pool, req, res));
@@ -3070,13 +3086,38 @@ app.put('/api/orders/:id', authenticateAndAttach, (0, apiHelpers_1.requirePermis
         catch (e) {
             console.error('Failed to write order status history:', e);
         }
-        // Send order status update email if status changed to shipped/out_for_delivery/delivered
+        // Send order status update email and WhatsApp if status changed to shipped/out_for_delivery/delivered
         if (Object.prototype.hasOwnProperty.call(body, 'status')) {
             const newStatus = body.status?.toLowerCase();
             if (['shipped', 'out_for_delivery', 'delivered'].includes(newStatus)) {
                 (0, emailService_1.sendOrderStatusUpdateEmail)(rows[0]).catch(err => {
                     console.error('Failed to send order status update email:', err);
                 });
+                // Send WhatsApp notification
+                try {
+                    const { WhatsAppService } = await Promise.resolve().then(() => __importStar(require('./services/whatsappService')));
+                    const whatsappService = new WhatsAppService(pool);
+                    // Get user phone from order
+                    const userResult = await pool.query('SELECT name, phone FROM users WHERE id = $1 OR email = $2', [rows[0].user_id, rows[0].customer_email]);
+                    if (userResult.rows.length > 0 && userResult.rows[0].phone) {
+                        const user = userResult.rows[0];
+                        const orderId = rows[0].order_number || rows[0].order_id || rows[0].id.toString();
+                        const tracking = rows[0].tracking || rows[0].tracking_url || 'N/A';
+                        if (newStatus === 'shipped' || newStatus === 'out_for_delivery') {
+                            whatsappService.sendOrderShippedWhatsApp(user, orderId, tracking).catch(err => {
+                                console.error('Failed to send WhatsApp order shipped notification:', err);
+                            });
+                        }
+                        else if (newStatus === 'delivered') {
+                            whatsappService.sendOrderDeliveredWhatsApp(user, orderId).catch(err => {
+                                console.error('Failed to send WhatsApp order delivered notification:', err);
+                            });
+                        }
+                    }
+                }
+                catch (waErr) {
+                    console.error('Error sending WhatsApp order notification:', waErr);
+                }
             }
         }
         // Broadcast to admin

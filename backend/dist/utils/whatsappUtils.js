@@ -295,6 +295,52 @@ async function processIncomingMessage(pool, message, metadata) {
         const timestamp = message.timestamp ? new Date(parseInt(message.timestamp) * 1000) : new Date();
         // Extract message content
         const content = extractMessageContent(message);
+        // Handle COD confirmation (YES/NO replies)
+        if (content.type === 'text' && content.text) {
+            const normalizedText = content.text.trim().toUpperCase();
+            if (normalizedText === 'YES' || normalizedText === 'NO') {
+                try {
+                    // Find pending COD order for this phone
+                    const orderResult = await pool.query(`SELECT id, order_number, order_id, status, payment_method, total 
+             FROM orders 
+             WHERE customer_phone = $1 
+               AND (payment_method ILIKE '%cod%' OR payment_method ILIKE '%cash%')
+               AND status IN ('pending', 'confirmed', 'processing')
+             ORDER BY created_at DESC 
+             LIMIT 1`, [fromPhone]);
+                    if (orderResult.rows.length > 0) {
+                        const order = orderResult.rows[0];
+                        const orderId = order.order_number || order.order_id || order.id.toString();
+                        if (normalizedText === 'YES') {
+                            // Confirm COD order
+                            await pool.query(`UPDATE orders 
+                 SET status = 'confirmed', 
+                     updated_at = NOW() 
+                 WHERE id = $1`, [order.id]);
+                            console.log(`✅ COD order confirmed via WhatsApp: ${orderId}`);
+                            // Send confirmation message
+                            await sendWhatsAppMessage(fromPhone, `Thank you! Your COD order #${orderId} has been confirmed. We'll process it shortly.`, pool);
+                        }
+                        else {
+                            // Cancel COD order
+                            await pool.query(`UPDATE orders 
+                 SET status = 'cancelled', 
+                     updated_at = NOW() 
+                 WHERE id = $1`, [order.id]);
+                            console.log(`❌ COD order cancelled via WhatsApp: ${orderId}`);
+                            // Send cancellation message
+                            await sendWhatsAppMessage(fromPhone, `Your COD order #${orderId} has been cancelled as requested.`, pool);
+                        }
+                        // Return early - COD handling complete
+                        return;
+                    }
+                }
+                catch (codErr) {
+                    console.error('Error handling COD confirmation:', codErr);
+                    // Continue with normal message processing
+                }
+            }
+        }
         // Log incoming message to database
         try {
             await pool.query(`

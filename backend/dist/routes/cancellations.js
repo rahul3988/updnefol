@@ -45,6 +45,7 @@ exports.rejectCancellation = rejectCancellation;
 exports.cancelOrderImmediate = cancelOrderImmediate;
 const apiHelpers_1 = require("../utils/apiHelpers");
 const razorpay_1 = __importDefault(require("razorpay"));
+const whatsappService_1 = require("../services/whatsappService");
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'F9PT2uJbFVQUedEXI3iL59N9';
 const razorpay = new razorpay_1.default({
     key_id: process.env.RAZORPAY_KEY_ID || 'rzp_live_RigxrHNSReeV37',
@@ -226,6 +227,19 @@ async function approveCancellation(pool, req, res) {
                 await pool.query(`UPDATE order_cancellations 
           SET refund_status = 'processing', razorpay_refund_id = $1, refund_id = $2
           WHERE id = $3`, [refund.id, refund.id, id]);
+                // Send WhatsApp refund notification (async, don't wait)
+                try {
+                    const userResult = await pool.query('SELECT name, phone FROM users WHERE id = (SELECT user_id FROM order_cancellations WHERE id = $1) OR email = $2', [id, cancellation.customer_email || '']);
+                    if (userResult.rows.length > 0 && userResult.rows[0].phone) {
+                        const whatsappService = new whatsappService_1.WhatsAppService(pool);
+                        whatsappService.sendRefundWhatsApp({ name: userResult.rows[0].name || 'Customer', phone: userResult.rows[0].phone }, cancellation.order_number, parseFloat(cancellation.refund_amount)).catch(err => {
+                            console.error('Failed to send WhatsApp refund notification:', err);
+                        });
+                    }
+                }
+                catch (waErr) {
+                    console.error('Error sending WhatsApp refund notification:', waErr);
+                }
                 (0, apiHelpers_1.sendSuccess)(res, {
                     cancellation_id: id,
                     refund_id: refund.id,
@@ -242,6 +256,19 @@ async function approveCancellation(pool, req, res) {
         else {
             // For COD or other payment methods, mark refund as processed
             await pool.query(`UPDATE order_cancellations SET refund_status = 'processed' WHERE id = $1`, [id]);
+            // Send WhatsApp refund notification for COD (async, don't wait)
+            try {
+                const userResult = await pool.query('SELECT name, phone FROM users WHERE id = (SELECT user_id FROM order_cancellations WHERE id = $1) OR email = $2', [id, cancellation.customer_email || '']);
+                if (userResult.rows.length > 0 && userResult.rows[0].phone) {
+                    const whatsappService = new whatsappService_1.WhatsAppService(pool);
+                    whatsappService.sendRefundWhatsApp({ name: userResult.rows[0].name || 'Customer', phone: userResult.rows[0].phone }, cancellation.order_number, parseFloat(cancellation.refund_amount)).catch(err => {
+                        console.error('Failed to send WhatsApp refund notification:', err);
+                    });
+                }
+            }
+            catch (waErr) {
+                console.error('Error sending WhatsApp refund notification:', waErr);
+            }
             (0, apiHelpers_1.sendSuccess)(res, {
                 cancellation_id: id,
                 message: 'Cancellation approved. Refund will be processed manually for COD orders.'
