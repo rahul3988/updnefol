@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getCart = getCart;
 exports.addToCart = addToCart;
@@ -18,9 +21,11 @@ exports.createUserAddress = createUserAddress;
 exports.updateUserAddress = updateUserAddress;
 exports.deleteUserAddress = deleteUserAddress;
 exports.setDefaultAddress = setDefaultAddress;
+const bcrypt_1 = __importDefault(require("bcrypt"));
 const apiHelpers_1 = require("../utils/apiHelpers");
 const userActivitySchema_1 = require("../utils/userActivitySchema");
 const emailService_1 = require("../services/emailService");
+const SALT_ROUNDS = 10;
 // Optimized GET /api/cart
 async function getCart(pool, req, res) {
     try {
@@ -241,8 +246,24 @@ async function login(pool, req, res) {
             return (0, apiHelpers_1.sendError)(res, 401, 'Invalid credentials');
         }
         const user = rows[0];
-        // Simple password check (in production, use bcrypt)
-        if (user.password !== password) {
+        // Check password using bcrypt (with backward compatibility for plain text)
+        let passwordValid = false;
+        // Check if password is bcrypt hash (starts with $2a$, $2b$, or $2y$)
+        if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$')) {
+            // Password is hashed with bcrypt
+            passwordValid = await bcrypt_1.default.compare(password, user.password);
+        }
+        else {
+            // Backward compatibility: plain text password (migrate on successful login)
+            if (user.password === password) {
+                passwordValid = true;
+                // Migrate to bcrypt hash on successful login
+                const hashedPassword = await bcrypt_1.default.hash(password, SALT_ROUNDS);
+                await pool.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hashedPassword, user.id]);
+                console.log(`✅ Migrated password to bcrypt for user: ${user.id}`);
+            }
+        }
+        if (!passwordValid) {
             return (0, apiHelpers_1.sendError)(res, 401, 'Invalid credentials');
         }
         // Generate token
@@ -287,12 +308,14 @@ async function register(pool, req, res) {
             return (0, apiHelpers_1.sendError)(res, 409, 'User already exists');
         }
         console.log('✅ Creating new user...');
+        // Hash password with bcrypt before storing
+        const hashedPassword = await bcrypt_1.default.hash(password, SALT_ROUNDS);
         // Create new user
         const { rows } = await pool.query(`
       INSERT INTO users (name, email, password, phone, address)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, name, email, phone, created_at
-    `, [name, email, password, phone, req.body.address ? JSON.stringify(req.body.address) : null]);
+    `, [name, email, hashedPassword, phone, req.body.address ? JSON.stringify(req.body.address) : null]);
         const user = rows[0];
         const token = `user_token_${user.id}_${Date.now()}`;
         console.log('✅ User created successfully:', user.email);

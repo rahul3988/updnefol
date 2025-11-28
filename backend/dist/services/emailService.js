@@ -6,6 +6,7 @@ exports.sendOrderConfirmationEmail = sendOrderConfirmationEmail;
 exports.sendPaymentFailedEmail = sendPaymentFailedEmail;
 exports.sendOrderStatusUpdateEmail = sendOrderStatusUpdateEmail;
 exports.sendCartAbandonmentEmail = sendCartAbandonmentEmail;
+exports.sendPasswordResetEmail = sendPasswordResetEmail;
 // Email Service - All 6 Email Automation Events
 const email_1 = require("../utils/email");
 // 1. Welcome Email - User Signup
@@ -377,5 +378,57 @@ async function sendCartAbandonmentEmail(userEmail, userName, cartItems) {
     catch (error) {
         console.error('❌ Error sending cart abandonment email:', error);
         // Don't throw - email failures shouldn't break cron job
+    }
+}
+// 7. Password Reset Email
+async function sendPasswordResetEmail(userEmail, userName, resetLink) {
+    try {
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your Password</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Password Reset Request</h1>
+        </div>
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">We received a request to reset your password for your Thenefol account.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetLink}" style="background: #667eea; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">Reset Your Password</a>
+          </div>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">Or copy and paste this link into your browser:</p>
+          <p style="font-size: 12px; color: #999; word-break: break-all; background: #fff; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">${resetLink}</p>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;"><strong>This link will expire in 15 minutes.</strong></p>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">If you did not request a password reset, please ignore this email. Your password will remain unchanged.</p>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">For security reasons, this link can only be used once.</p>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">If you continue to have problems, please contact our support team.</p>
+          
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you,<br>The Thenefol Team</p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: 'Reset Your Password - Thenefol',
+            html
+        });
+        console.log(`✅ Password reset email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending password reset email:', error);
+        throw error; // Throw here so we know if email sending failed
     }
 }

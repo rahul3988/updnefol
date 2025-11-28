@@ -74,6 +74,7 @@ const paymentRoutes = __importStar(require("./routes/payment"));
 const otpRoutes = __importStar(require("./routes/otp"));
 const notificationRoutes = __importStar(require("./routes/notifications"));
 const userRoutes = __importStar(require("./routes/users"));
+const authRoutes = __importStar(require("./routes/auth"));
 const cancellationRoutes = __importStar(require("./routes/cancellations"));
 const seedCMS_1 = require("./utils/seedCMS");
 const updateAllProducts_1 = require("./utils/updateAllProducts");
@@ -919,6 +920,9 @@ app.delete('/api/cart', apiHelpers_1.authenticateToken, (req, res) => cartRoutes
 app.post('/api/auth/login', (req, res) => cartRoutes.login(pool, req, res));
 app.post('/api/auth/register', (req, res) => cartRoutes.register(pool, req, res));
 app.post('/api/auth/signup', (req, res) => cartRoutes.register(pool, req, res));
+// Password Reset Routes
+app.post('/api/auth/forgot-password', (req, res) => authRoutes.forgotPassword(pool, req, res));
+app.post('/api/auth/reset-password', (req, res) => authRoutes.resetPassword(pool, req, res));
 // OTP Routes (WhatsApp + Email)
 app.post('/api/otp/send', (req, res) => otpRoutes.sendOTP(pool, req, res));
 app.post('/api/otp/verify', (req, res) => otpRoutes.verifyOTP(pool, req, res));
