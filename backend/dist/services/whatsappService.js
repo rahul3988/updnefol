@@ -89,9 +89,9 @@ class WhatsAppService {
         try {
             // nefol_otp_auth uses Meta's "Copy Code" OTP format - zero variables, zero buttons
             // Meta automatically generates OTP and enables zero-tap auto-fill
-            // No backend OTP generation - pass empty array (no parameters sent to template)
+            // No backend OTP generation - do not pass variables parameter
             // The template helper will omit the components field entirely for this template
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', [], 'en');
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', undefined, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
