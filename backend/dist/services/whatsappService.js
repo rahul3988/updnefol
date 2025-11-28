@@ -78,8 +78,8 @@ class WhatsAppService {
         }
     }
     /**
-     * Send OTP via WhatsApp using nefol_otp_auth template
-     * Template: nefol_otp_auth (Meta's "Copy Code" authentication template)
+     * Send OTP via WhatsApp using nefol_verify_code template
+     * Template: nefol_verify_code (Meta's "Copy Code" authentication template)
      * Variables: None - Meta automatically generates and sends the OTP code
      *
      * @param {string} phone - Recipient phone number
@@ -87,11 +87,11 @@ class WhatsAppService {
      */
     async sendOTPWhatsApp(phone) {
         try {
-            // nefol_otp_auth uses Meta's "Copy Code" OTP format - zero variables, zero buttons
+            // nefol_verify_code uses Meta's "Copy Code" OTP format - zero variables, zero buttons
             // Meta automatically generates OTP and enables zero-tap auto-fill
             // No backend OTP generation - do not pass variables parameter
             // The template helper will omit the components field entirely for this template
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', undefined, 'en');
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_verify_code', undefined, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }

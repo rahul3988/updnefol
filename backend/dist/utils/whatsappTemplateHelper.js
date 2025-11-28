@@ -39,17 +39,17 @@ function normalizePhoneNumber(phone) {
 /**
  * Send WhatsApp template message with retry logic
  *
- * Template: nefol_otp_auth, nefol_reset_password, nefol_order_delivered, etc.
+ * Template: nefol_verify_code, nefol_reset_password, nefol_order_delivered, etc.
  * Variables are converted to components.body.parameters in order
  *
  * @param {string} to - Recipient phone number (will be normalized to E.164)
- * @param {string} templateName - Template name (e.g., 'nefol_otp_auth')
+ * @param {string} templateName - Template name (e.g., 'nefol_verify_code')
  * @param {TemplateVariable[]} variables - Template variables in order
  * @param {string} languageCode - Language code (default: 'en')
  * @returns {Promise<SendTemplateResult>} Result with provider message ID or error
  *
  * @example
- * await sendWhatsAppTemplate('919876543210', 'nefol_otp_auth', [
+ * await sendWhatsAppTemplate('919876543210', 'nefol_verify_code', [
  *   { type: 'text', text: '123456' },
  *   { type: 'text', text: '5' }
  * ])
@@ -74,14 +74,14 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         const baseUrl = (0, whatsapp_1.getWhatsAppApiUrl)();
         const accessToken = (0, whatsapp_1.getAccessToken)();
         const endpoint = `${baseUrl}/${phoneNumberId}/messages`;
-        // Special handling for nefol_otp_auth - Meta's "Copy Code" OTP format
+        // Special handling for nefol_verify_code - Meta's "Copy Code" OTP format
         // This template uses zero variables and zero buttons - pure template only
         // Meta automatically generates OTP and enables zero-tap auto-fill
-        // Send empty components array with empty body parameters to explicitly indicate no parameters
-        if (templateName === 'nefol_otp_auth') {
-            // Even for Copy Code templates, if Meta's API expects a components field,
-            // we send an empty components array with empty body parameters
-            // This explicitly tells Meta "no parameters" and satisfies the API requirement
+        // IMPORTANT: For Copy Code to work, the template in Meta MUST have NO parameter placeholders
+        // If the template has {{1}} or other placeholders, it's not a true Copy Code template
+        if (templateName === 'nefol_verify_code') {
+            // Try omitting components field entirely first (correct for true Copy Code templates)
+            // If template has no parameters defined in Meta, this will work
             const requestBody = {
                 messaging_product: 'whatsapp',
                 to: normalizedPhone,
@@ -90,17 +90,12 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                     name: templateName,
                     language: {
                         code: languageCode
-                    },
-                    components: [
-                        {
-                            type: 'body',
-                            parameters: [] // Empty parameters array - no variables sent
-                        }
-                    ]
+                    }
+                    // Components field omitted - for true Copy Code templates with no parameters
                 }
             };
             // Debug: Log the request body to verify structure
-            console.log('📤 Sending nefol_otp_auth template (Copy Code - empty parameters):', JSON.stringify(requestBody, null, 2));
+            console.log('📤 Sending nefol_verify_code template (Copy Code - no components field):', JSON.stringify(requestBody, null, 2));
             // Retry logic: 1 retry for transient 5xx errors
             let lastError = null;
             for (let attempt = 0; attempt < 2; attempt++) {
@@ -136,9 +131,9 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                         console.error('   Template:', templateName);
                         console.error('   Phone:', normalizedPhone);
                         // Special error message for parameter mismatch on Copy Code template
-                        if (templateName === 'nefol_otp_auth' && errorCode === 132000) {
+                        if (templateName === 'nefol_verify_code' && errorCode === 132000) {
                             console.error('   ⚠️  Template Configuration Issue:');
-                            console.error('      The nefol_otp_auth template in Meta Business Manager appears to have parameters defined.');
+                            console.error('      The nefol_verify_code template in Meta Business Manager appears to have parameters defined.');
                             console.error('      For Copy Code OTP format, the template should have NO parameter placeholders (no {{1}}, etc.).');
                             console.error('      Please recreate the template in Meta without any parameters for Copy Code to work.');
                         }
