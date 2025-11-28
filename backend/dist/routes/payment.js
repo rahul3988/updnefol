@@ -8,6 +8,7 @@ const express_1 = require("express");
 const crypto_1 = __importDefault(require("crypto"));
 const apiHelpers_1 = require("../utils/apiHelpers");
 const razorpay_1 = __importDefault(require("razorpay"));
+const emailService_1 = require("../services/emailService");
 const router = (0, express_1.Router)();
 // Get Razorpay credentials
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_live_RigxrHNSReeV37';
@@ -153,6 +154,7 @@ const createRazorpayOrder = (pool) => async (req, res) => {
 exports.createRazorpayOrder = createRazorpayOrder;
 // Verify Razorpay payment
 const verifyRazorpayPayment = (pool) => async (req, res) => {
+    let order_number;
     try {
         // Validate pool is available
         if (!pool) {
@@ -164,7 +166,8 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             console.error('RAZORPAY_KEY_SECRET not configured');
             return (0, apiHelpers_1.sendError)(res, 500, 'Payment gateway not configured');
         }
-        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_number } = req.body;
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, order_number: orderNum } = req.body;
+        order_number = orderNum;
         // Validate all required fields
         if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
             console.error('Missing payment verification details:', {
@@ -187,7 +190,7 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
         if (!isAuthentic) {
             console.error('Payment signature verification failed', {
                 order_id: razorpay_order_id,
-                order_number,
+                order_number: order_number,
                 generated_sig: generated_signature.substring(0, 10) + '...',
                 received_sig: razorpay_signature.substring(0, 10) + '...'
             });
@@ -202,7 +205,7 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             console.error('Database error while checking order:', {
                 error: dbErr.message,
                 code: dbErr.code,
-                order_number
+                order_number: order_number
             });
             return (0, apiHelpers_1.sendError)(res, 500, 'Database error while verifying order', dbErr);
         }
@@ -228,7 +231,7 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             console.error('Database error while updating order:', {
                 error: dbErr.message,
                 code: dbErr.code,
-                order_number
+                order_number: order_number
             });
             return (0, apiHelpers_1.sendError)(res, 500, 'Database error while updating order status', dbErr);
         }
@@ -245,7 +248,7 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             console.error('Database error while fetching updated order:', {
                 error: dbErr.message,
                 code: dbErr.code,
-                order_number
+                order_number: order_number
             });
             return (0, apiHelpers_1.sendError)(res, 500, 'Database error while fetching order details', dbErr);
         }
@@ -267,6 +270,21 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             error_code: err.code,
             error_name: err.name
         });
+        // Send payment failed email if we have order details
+        if (order_number) {
+            try {
+                const orderResult = await pool.query('SELECT * FROM orders WHERE order_number = $1', [order_number]);
+                if (orderResult.rows.length > 0) {
+                    const order = orderResult.rows[0];
+                    (0, emailService_1.sendPaymentFailedEmail)(order.customer_email, order.customer_name, order_number, err.message || 'Payment verification failed').catch(emailErr => {
+                        console.error('Failed to send payment failed email:', emailErr);
+                    });
+                }
+            }
+            catch (emailErr) {
+                console.error('Error fetching order for payment failed email:', emailErr);
+            }
+        }
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to verify payment', err);
     }
 };

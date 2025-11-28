@@ -71,8 +71,9 @@ const searchRoutes = __importStar(require("./routes/search"));
 const marketingRoutes = __importStar(require("./routes/marketing"));
 const whatsappWebhookRoutes = __importStar(require("./routes/whatsappWebhook"));
 const paymentRoutes = __importStar(require("./routes/payment"));
-const userRoutes = __importStar(require("./routes/users"));
+const otpRoutes = __importStar(require("./routes/otp"));
 const notificationRoutes = __importStar(require("./routes/notifications"));
+const userRoutes = __importStar(require("./routes/users"));
 const cancellationRoutes = __importStar(require("./routes/cancellations"));
 const seedCMS_1 = require("./utils/seedCMS");
 const updateAllProducts_1 = require("./utils/updateAllProducts");
@@ -87,6 +88,8 @@ const subscriptionRoutes = __importStar(require("./routes/subscriptions"));
 const productCollectionRoutes = __importStar(require("./routes/productCollections"));
 const apiManager_1 = require("./routes/apiManager");
 const whatsappScheduler_1 = require("./utils/whatsappScheduler");
+const emailService_1 = require("./services/emailService");
+const cartAbandonment_1 = require("./cron/cartAbandonment");
 const app = (0, express_1.default)();
 // Register GET webhook route early (doesn't need pool, and must be before express.json())
 // This handles Meta's webhook verification
@@ -826,6 +829,8 @@ app.get('/api/alerts/config', (req, res) => notificationRoutes.getConfig(pool, r
 app.post('/api/alerts/config', (req, res) => notificationRoutes.saveConfig(pool, req, res));
 app.post('/api/alerts/test/whatsapp', (req, res) => notificationRoutes.testWhatsApp(pool, req, res));
 app.post('/api/alerts/test/email', (req, res) => notificationRoutes.testEmail(pool, req, res));
+// Order Notification Route (WhatsApp) - New modular endpoint
+app.post('/api/notifications/order', (req, res) => notificationRoutes.sendOrderNotification(pool, req, res));
 app.get('/api/returns', authenticateAndAttach, (0, apiHelpers_1.requirePermission)(['returns:read']), (req, res) => returnRoutes.listReturns(pool, req, res));
 app.post('/api/returns', authenticateAndAttach, (0, apiHelpers_1.requirePermission)(['returns:create']), (req, res) => returnRoutes.createReturn(pool, req, res));
 app.put('/api/returns/:id/status', authenticateAndAttach, (0, apiHelpers_1.requirePermission)(['returns:update']), (req, res) => returnRoutes.updateReturnStatus(pool, req, res));
@@ -914,6 +919,10 @@ app.delete('/api/cart', apiHelpers_1.authenticateToken, (req, res) => cartRoutes
 app.post('/api/auth/login', (req, res) => cartRoutes.login(pool, req, res));
 app.post('/api/auth/register', (req, res) => cartRoutes.register(pool, req, res));
 app.post('/api/auth/signup', (req, res) => cartRoutes.register(pool, req, res));
+// OTP Routes (WhatsApp + Email)
+app.post('/api/otp/send', (req, res) => otpRoutes.sendOTP(pool, req, res));
+app.post('/api/otp/verify', (req, res) => otpRoutes.verifyOTP(pool, req, res));
+// Legacy OTP routes (backward compatibility - using cart routes)
 app.post('/api/auth/send-otp', (req, res) => cartRoutes.sendOTP(pool, req, res));
 app.post('/api/auth/verify-otp-signup', (req, res) => cartRoutes.verifyOTPSignup(pool, req, res));
 app.post('/api/auth/send-otp-login', (req, res) => cartRoutes.sendOTPLogin(pool, req, res));
@@ -2921,6 +2930,15 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
         else {
             console.log(`ℹ️ Skipping auto-shipment creation for order ${order_number} (payment_status: ${payment_status}, cod: ${cod}, address complete: ${!!(shipping_address?.address && shipping_address?.city && shipping_address?.pincode)})`);
         }
+        // Send order confirmation email (async, don't wait)
+        // Send to customer
+        (0, emailService_1.sendOrderConfirmationEmail)(order, false).catch(err => {
+            console.error('Failed to send order confirmation email to customer:', err);
+        });
+        // Also send copy to admin
+        (0, emailService_1.sendOrderConfirmationEmail)(order, true).catch(err => {
+            console.error('Failed to send order confirmation email to admin:', err);
+        });
         (0, apiHelpers_1.sendSuccess)(res, order, 201);
     }
     catch (err) {
@@ -3047,6 +3065,15 @@ app.put('/api/orders/:id', authenticateAndAttach, (0, apiHelpers_1.requirePermis
         }
         catch (e) {
             console.error('Failed to write order status history:', e);
+        }
+        // Send order status update email if status changed to shipped/out_for_delivery/delivered
+        if (Object.prototype.hasOwnProperty.call(body, 'status')) {
+            const newStatus = body.status?.toLowerCase();
+            if (['shipped', 'out_for_delivery', 'delivered'].includes(newStatus)) {
+                (0, emailService_1.sendOrderStatusUpdateEmail)(rows[0]).catch(err => {
+                    console.error('Failed to send order status update email:', err);
+                });
+            }
         }
         // Broadcast to admin
         broadcastUpdate('order_updated', rows[0]);
@@ -4186,6 +4213,8 @@ const port = Number(process.env.PORT || 2000);
     await (0, updateAllProducts_1.updateAllProductsWithPricing)(pool);
     // Sample products removed - no longer adding sample products on startup
     const host = process.env.HOST || '0.0.0.0'; // Listen on all network interfaces
+    // Start cart abandonment cron job
+    (0, cartAbandonment_1.startCartAbandonmentCron)(pool);
     server.listen(port, host, () => {
         console.log(`🚀 Nefol API running on http://${host}:${port}`);
         console.log(`📡 WebSocket server ready for real-time updates`);

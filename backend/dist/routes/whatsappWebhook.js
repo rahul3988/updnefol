@@ -1,7 +1,17 @@
 "use strict";
+/**
+ * WhatsApp Webhook Routes
+ *
+ * Handles Meta's WhatsApp Business Cloud API webhook requests:
+ * - GET /webhook: Webhook verification
+ * - POST /webhook: Incoming messages and status updates
+ *
+ * @module routes/whatsappWebhook
+ */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleWebhook = exports.verifyWebhook = void 0;
 const whatsappUtils_1 = require("../utils/whatsappUtils");
+const whatsappService_1 = require("../services/whatsappService");
 /**
  * GET endpoint for Meta webhook verification
  * Meta sends: hub.mode, hub.verify_token, hub.challenge
@@ -152,10 +162,15 @@ const handleWebhook = async (pool, req, res) => {
                         if (!value || value.messaging_product !== 'whatsapp') {
                             continue;
                         }
+                        // Initialize WhatsApp service for processing
+                        const whatsappService = new whatsappService_1.WhatsAppService(pool);
                         // Process incoming messages
                         if (value.messages && Array.isArray(value.messages)) {
                             for (const message of value.messages) {
                                 try {
+                                    // Use service method for better abstraction
+                                    await whatsappService.handleIncomingMessage(message);
+                                    // Also use utility for database logging (backward compatibility)
                                     await (0, whatsappUtils_1.processIncomingMessage)(pool, message, value.metadata);
                                 }
                                 catch (err) {
@@ -168,6 +183,9 @@ const handleWebhook = async (pool, req, res) => {
                         if (value.statuses && Array.isArray(value.statuses)) {
                             for (const status of value.statuses) {
                                 try {
+                                    // Use service method for better abstraction
+                                    await whatsappService.handleStatusUpdate(status);
+                                    // Also use utility for database logging (backward compatibility)
                                     await (0, whatsappUtils_1.processStatusUpdate)(pool, status);
                                 }
                                 catch (err) {

@@ -20,6 +20,7 @@ exports.deleteUserAddress = deleteUserAddress;
 exports.setDefaultAddress = setDefaultAddress;
 const apiHelpers_1 = require("../utils/apiHelpers");
 const userActivitySchema_1 = require("../utils/userActivitySchema");
+const emailService_1 = require("../services/emailService");
 // Optimized GET /api/cart
 async function getCart(pool, req, res) {
     try {
@@ -115,6 +116,16 @@ async function addToCart(pool, req, res) {
                 user_agent: req.headers['user-agent'],
                 ip_address: req.ip || req.connection.remoteAddress
             });
+            // Send cart reminder email (async, don't wait)
+            // Only send if this is a new item (not an update to existing)
+            if (existingItem.rows.length === 0) {
+                const userData = await pool.query('SELECT email, name FROM users WHERE id = $1', [userId]);
+                if (userData.rows.length > 0 && userData.rows[0].email) {
+                    (0, emailService_1.sendCartAddedEmail)(userData.rows[0].email, userData.rows[0].name || 'Customer', productData.rows[0].title, parseFloat(productData.rows[0].price)).catch(err => {
+                        console.error('Failed to send cart reminder email:', err);
+                    });
+                }
+            }
         }
     }
     catch (err) {
@@ -285,6 +296,10 @@ async function register(pool, req, res) {
         const user = rows[0];
         const token = `user_token_${user.id}_${Date.now()}`;
         console.log('✅ User created successfully:', user.email);
+        // Send welcome email (async, don't wait)
+        (0, emailService_1.sendWelcomeEmail)(user.email, user.name).catch(err => {
+            console.error('Failed to send welcome email:', err);
+        });
         // If address is provided, create a default address
         if (req.body.address && req.body.address.street) {
             try {

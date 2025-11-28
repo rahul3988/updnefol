@@ -1,0 +1,161 @@
+{
+  "info": {
+    "name": "WhatsApp Business Cloud API",
+    "description": "Complete WhatsApp Business Cloud API integration endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Webhook",
+      "item": [
+        {
+          "name": "Verify Webhook (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token={{verify_token}}&hub.challenge=test_challenge",
+              "host": ["{{base_url}}"],
+              "path": ["api", "whatsapp", "webhook"],
+              "query": [
+                {
+                  "key": "hub.mode",
+                  "value": "subscribe"
+                },
+                {
+                  "key": "hub.verify_token",
+                  "value": "{{verify_token}}"
+                },
+                {
+                  "key": "hub.challenge",
+                  "value": "test_challenge"
+                }
+              ]
+            },
+            "description": "Meta sends this request to verify your webhook endpoint. Returns the challenge if token matches."
+          },
+          "response": []
+        },
+        {
+          "name": "Handle Webhook (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Hub-Signature-256",
+                "value": "sha256=signature_here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [{\n    \"changes\": [{\n      \"value\": {\n        \"messaging_product\": \"whatsapp\",\n        \"messages\": [{\n          \"id\": \"wamid.xxx\",\n          \"from\": \"919876543210\",\n          \"type\": \"text\",\n          \"text\": {\n            \"body\": \"Hello\"\n          },\n          \"timestamp\": \"1234567890\"\n        }],\n        \"statuses\": [{\n          \"id\": \"wamid.xxx\",\n          \"status\": \"delivered\",\n          \"timestamp\": \"1234567890\",\n          \"recipient_id\": \"919876543210\"\n        }]\n      }\n    }]\n  }]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/whatsapp/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["api", "whatsapp", "webhook"]
+            },
+            "description": "Receives incoming messages and status updates from Meta"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "OTP",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"919876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/otp/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "otp", "send"]
+            },
+            "description": "Send OTP via WhatsApp (primary) and Email (secondary)"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"919876543210\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/otp/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "otp", "verify"]
+            },
+            "description": "Verify OTP code"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Send Order Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"919876543210\",\n  \"name\": \"Rahul\",\n  \"orderId\": \"NF12345\",\n  \"total\": 899,\n  \"items\": [\"Item 1\", \"Item 2\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications/order",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "order"]
+            },
+            "description": "Send order confirmation notification via WhatsApp"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://thenefol.com",
+      "type": "string"
+    },
+    {
+      "key": "verify_token",
+      "value": "your_verify_token_here",
+      "type": "string"
+    }
+  ]
+}
+
