@@ -210,6 +210,15 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             console.error('Order not found for verification:', order_number);
             return (0, apiHelpers_1.sendError)(res, 404, `Order not found: ${order_number}`);
         }
+        // Ensure Razorpay columns exist in orders table
+        try {
+            await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_order_id TEXT`);
+            await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS razorpay_payment_id TEXT`);
+        }
+        catch (colErr) {
+            // Log but don't fail if columns already exist or other minor issues
+            console.warn('Warning while ensuring Razorpay columns:', colErr.message);
+        }
         // Update order status in database
         let updateResult;
         try {
