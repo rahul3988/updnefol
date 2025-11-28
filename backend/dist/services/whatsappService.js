@@ -89,27 +89,17 @@ class WhatsAppService {
      */
     async sendOTPWhatsApp(phone, otp, name = '') {
         try {
-            const otpTtl = parseInt(process.env.OTP_TTL_SECONDS || '300');
-            const expiryMinutes = Math.ceil(otpTtl / 60);
             // Template only expects 1 parameter (OTP code)
+            // Authentication templates must use en and NO fallback to plain text
             const variables = [
                 { type: 'text', text: otp }
             ];
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', variables);
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_otp_auth', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
-            // Fallback to plain text if template error
-            if (result.error?.isTemplateError) {
-                console.warn('⚠️  Template error, falling back to plain text for OTP');
-                const fallbackResult = await this.sendText(phone, `Your verification code is ${otp}. Valid for ${expiryMinutes} minutes. Do NOT share.`);
-                return {
-                    ok: fallbackResult.success,
-                    providerId: fallbackResult.data?.messages?.[0]?.id,
-                    fallbackUsed: true,
-                    error: fallbackResult.success ? undefined : { message: fallbackResult.error }
-                };
-            }
+            // NO fallback to plain text for authentication templates
+            // Return error to caller - they must handle it
             return { ok: false, error: result.error };
         }
         catch (error) {
@@ -316,26 +306,17 @@ class WhatsAppService {
      */
     async sendResetPasswordWhatsApp(phone, code, name = '') {
         try {
-            const expiryMinutes = 15;
+            // Template expects 1 parameter (reset code)
+            // Authentication templates must use en and NO fallback to plain text
             const variables = [
-                { type: 'text', text: code },
-                { type: 'text', text: expiryMinutes.toString() }
+                { type: 'text', text: code }
             ];
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_reset_password', variables);
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_reset_password', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
-            // Fallback to plain text
-            if (result.error?.isTemplateError) {
-                console.warn('⚠️  Template error, falling back to plain text for reset password');
-                const fallbackResult = await this.sendText(phone, `Your password reset code is ${code}. Valid for ${expiryMinutes} minutes.`);
-                return {
-                    ok: fallbackResult.success,
-                    providerId: fallbackResult.data?.messages?.[0]?.id,
-                    fallbackUsed: true,
-                    error: fallbackResult.success ? undefined : { message: fallbackResult.error }
-                };
-            }
+            // NO fallback to plain text for authentication templates
+            // Return error to caller - they must handle it
             return { ok: false, error: result.error };
         }
         catch (error) {
@@ -359,19 +340,12 @@ class WhatsAppService {
             const variables = [
                 { type: 'text', text: user.name || 'User' }
             ];
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_signup_success', variables);
+            // Authentication templates must use en and NO fallback to plain text
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_signup_success', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
-            // Fallback to plain text
-            if (result.error?.isTemplateError) {
-                const fallbackResult = await this.sendText(user.phone, `Welcome ${user.name || 'User'}! Your account has been created successfully.`);
-                return {
-                    ok: fallbackResult.success,
-                    providerId: fallbackResult.data?.messages?.[0]?.id,
-                    fallbackUsed: true
-                };
-            }
+            // NO fallback to plain text for authentication templates
             return { ok: false, error: result.error };
         }
         catch (error) {
@@ -399,19 +373,12 @@ class WhatsAppService {
                 { type: 'text', text: deviceInfo },
                 { type: 'text', text: timestamp }
             ];
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_login_alert', variables);
+            // Authentication templates must use en and NO fallback to plain text
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_login_alert', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
-            // Fallback to plain text
-            if (result.error?.isTemplateError) {
-                const fallbackResult = await this.sendText(user.phone, `Login alert: ${user.name} logged in from ${deviceInfo} at ${timestamp}`);
-                return {
-                    ok: fallbackResult.success,
-                    providerId: fallbackResult.data?.messages?.[0]?.id,
-                    fallbackUsed: true
-                };
-            }
+            // NO fallback to plain text for authentication templates
             return { ok: false, error: result.error };
         }
         catch (error) {
@@ -646,19 +613,12 @@ class WhatsAppService {
             const variables = [
                 { type: 'text', text: user.name || 'User' }
             ];
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_greet_1', variables);
+            // Authentication templates must use en and NO fallback to plain text
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_greet_1', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
-            // Fallback to plain text
-            if (result.error?.isTemplateError) {
-                const fallbackResult = await this.sendText(user.phone, `Hello ${user.name}! Welcome to Thenefol. How can we help you today?`);
-                return {
-                    ok: fallbackResult.success,
-                    providerId: fallbackResult.data?.messages?.[0]?.id,
-                    fallbackUsed: true
-                };
-            }
+            // NO fallback to plain text for authentication templates
             return { ok: false, error: result.error };
         }
         catch (error) {
@@ -682,19 +642,12 @@ class WhatsAppService {
             const variables = [
                 { type: 'text', text: user.name || 'User' }
             ];
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_welcome_1', variables);
+            // Authentication templates must use en and NO fallback to plain text
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_welcome_1', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
-            // Fallback to plain text
-            if (result.error?.isTemplateError) {
-                const fallbackResult = await this.sendText(user.phone, `Welcome ${user.name}! Thank you for joining Thenefol. We're excited to have you!`);
-                return {
-                    ok: fallbackResult.success,
-                    providerId: fallbackResult.data?.messages?.[0]?.id,
-                    fallbackUsed: true
-                };
-            }
+            // NO fallback to plain text for authentication templates
             return { ok: false, error: result.error };
         }
         catch (error) {
