@@ -69,8 +69,10 @@ async function sendOTP(pool, req, res) {
             }
         };
         // WhatsApp send function
+        // Meta automatically generates OTP - no need to pass otp parameter
         const sendWhatsAppOtp = async (phoneNum, otp) => {
-            const result = await whatsappService.sendOTPWhatsApp(phoneNum, otp);
+            // OTP parameter is ignored - Meta generates it automatically via nefol_otp_auth template
+            const result = await whatsappService.sendOTPWhatsApp(phoneNum);
             if (!result.ok) {
                 throw new Error(result.error?.message || 'WhatsApp send failed');
             }
