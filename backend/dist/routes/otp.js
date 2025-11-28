@@ -33,7 +33,29 @@ async function sendOTP(pool, req, res) {
         }
         const phoneOrEmail = phone || email;
         const whatsappService = new whatsappService_1.WhatsAppService(pool);
-        // Email fallback function
+        // For WhatsApp: Meta generates OTP automatically - no backend generation needed
+        if (phone) {
+            try {
+                // Send WhatsApp OTP template - Meta handles OTP generation and zero-tap auto-fill
+                const result = await whatsappService.sendOTPWhatsApp(phone);
+                if (!result.ok) {
+                    console.error('❌ WhatsApp OTP send failed:', result.error?.message);
+                    return (0, apiHelpers_1.sendError)(res, 500, result.error?.message || 'Failed to send WhatsApp OTP');
+                }
+                console.log(`✅ WhatsApp OTP template sent to ${phone.replace(/.(?=.{4})/g, '*')}`);
+                const otpTtl = parseInt(process.env.OTP_TTL_SECONDS || '300');
+                return (0, apiHelpers_1.sendSuccess)(res, {
+                    message: 'OTP sent successfully to your WhatsApp',
+                    method: 'whatsapp',
+                    expiresIn: otpTtl
+                });
+            }
+            catch (err) {
+                console.error('❌ Error sending WhatsApp OTP:', err.message);
+                return (0, apiHelpers_1.sendError)(res, 500, 'Failed to send WhatsApp OTP', err);
+            }
+        }
+        // For Email: Generate OTP in backend (email doesn't support Meta's auto-OTP)
         const sendEmailOtp = async (emailAddr, otp) => {
             try {
                 const userResult = await pool.query('SELECT name FROM users WHERE email = $1', [emailAddr]);
@@ -68,18 +90,9 @@ async function sendOTP(pool, req, res) {
                 throw new Error(`Email send failed: ${err.message}`);
             }
         };
-        // WhatsApp send function
-        // Meta automatically generates OTP - no need to pass otp parameter
-        const sendWhatsAppOtp = async (phoneNum, otp) => {
-            // OTP parameter is ignored - Meta generates it automatically via nefol_otp_auth template
-            const result = await whatsappService.sendOTPWhatsApp(phoneNum);
-            if (!result.ok) {
-                throw new Error(result.error?.message || 'WhatsApp send failed');
-            }
-            return result;
-        };
-        // Generate and send OTP
-        const result = await (0, otpService_1.generateAndSendOtp)(pool, phoneOrEmail, phone ? sendWhatsAppOtp : undefined, email ? sendEmailOtp : undefined);
+        // Generate and send OTP for email
+        const result = await (0, otpService_1.generateAndSendOtp)(pool, phoneOrEmail, undefined, // No WhatsApp function - already handled above
+        sendEmailOtp);
         if (!result.ok) {
             return (0, apiHelpers_1.sendError)(res, 500, result.error?.message || 'Failed to send OTP');
         }
