@@ -87,9 +87,15 @@ async function ensureSchema(pool) {
       total_orders integer default 0,
       member_since timestamptz default now(),
       is_verified boolean default false,
+      reset_password_token text,
+      reset_password_expires timestamptz,
       created_at timestamptz default now(),
       updated_at timestamptz default now()
     );
+    
+    -- Add indexes for password reset fields
+    create index if not exists idx_users_reset_token on users(reset_password_token) where reset_password_token is not null;
+    create index if not exists idx_users_reset_expires on users(reset_password_expires) where reset_password_expires is not null;
     
     -- OTP table for WhatsApp authentication
     create table if not exists otp_verifications (

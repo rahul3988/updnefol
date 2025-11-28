@@ -457,7 +457,7 @@ async function sendOTP(pool, req, res) {
         // Send OTP via WhatsApp
         // Try template first, fallback to text message
         const templateName = process.env.WHATSAPP_OTP_TEMPLATE_NAME || 'otp_verification';
-        const templateLanguage = process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE || 'en_US';
+        const templateLanguage = process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE || 'en';
         const useTemplate = process.env.WHATSAPP_USE_TEMPLATE === 'true';
         const facebookUrl = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
         let requestBody;
@@ -782,7 +782,7 @@ async function sendOTPLogin(pool, req, res) {
         // Send OTP via WhatsApp
         // Try template first, fallback to text message
         const templateName = process.env.WHATSAPP_OTP_TEMPLATE_NAME || 'otp_verification';
-        const templateLanguage = process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE || 'en_US';
+        const templateLanguage = process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE || 'en';
         const useTemplate = process.env.WHATSAPP_USE_TEMPLATE === 'true';
         const facebookUrl = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
         let requestBody;

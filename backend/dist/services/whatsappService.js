@@ -138,7 +138,7 @@ class WhatsAppService {
      *
      * @param {string} to - Recipient phone number
      * @param {string} templateName - Template name (must be approved in Meta Business)
-     * @param {string} languageCode - Language code (e.g., 'en_US', 'hi_IN')
+     * @param {string} languageCode - Language code (e.g., 'en', 'hi_IN')
      * @param {Array} components - Template components (body parameters, buttons, etc.)
      * @returns {Promise<{success: boolean, data?: any, error?: string}>}
      *
@@ -147,14 +147,14 @@ class WhatsAppService {
      * const result = await service.sendTemplate(
      *   '919876543210',
      *   'otp_verification',
-     *   'en_US',
+     *   'en',
      *   [{
      *     type: 'body',
      *     parameters: [{ type: 'text', text: '123456' }]
      *   }]
      * )
      */
-    async sendTemplate(to, templateName, languageCode = 'en_US', components = []) {
+    async sendTemplate(to, templateName, languageCode = 'en', components = []) {
         try {
             const phoneNumberId = (0, whatsapp_1.getPhoneNumberId)();
             const endpoint = `/${phoneNumberId}/messages`;

@@ -93,6 +93,9 @@ const emailService_1 = require("./services/emailService");
 const cartAbandonment_1 = require("./cron/cartAbandonment");
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const app = (0, express_1.default)();
+// Trust proxy for accurate IP detection behind reverse proxy (Nginx)
+// Required for express-rate-limit to work correctly with X-Forwarded-For header
+app.set('trust proxy', true);
 // Register GET webhook route early (doesn't need pool, and must be before express.json())
 // This handles Meta's webhook verification
 app.get('/api/whatsapp/webhook', whatsappWebhookRoutes.verifyWebhook);

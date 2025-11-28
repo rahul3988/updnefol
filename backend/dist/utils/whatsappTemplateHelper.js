@@ -45,7 +45,7 @@ function normalizePhoneNumber(phone) {
  * @param {string} to - Recipient phone number (will be normalized to E.164)
  * @param {string} templateName - Template name (e.g., 'nefol_otp_auth')
  * @param {TemplateVariable[]} variables - Template variables in order
- * @param {string} languageCode - Language code (default: 'en_US')
+ * @param {string} languageCode - Language code (default: 'en')
  * @returns {Promise<SendTemplateResult>} Result with provider message ID or error
  *
  * @example
@@ -54,7 +54,7 @@ function normalizePhoneNumber(phone) {
  *   { type: 'text', text: '5' }
  * ])
  */
-async function sendWhatsAppTemplate(to, templateName, variables = [], languageCode = 'en_US') {
+async function sendWhatsAppTemplate(to, templateName, variables = [], languageCode = 'en') {
     try {
         // Normalize phone number
         const normalizedPhone = normalizePhoneNumber(to);
@@ -149,10 +149,16 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                 if (!response.ok) {
                     const errorCode = responseData.error?.code || response.status;
                     const errorMessage = responseData.error?.message || `HTTP ${response.status}`;
-                    // Check if it's a template error (132018 = template parameter issue)
-                    const isTemplateError = errorCode === 132018 ||
-                        errorMessage.includes('template') ||
-                        errorMessage.includes('parameter');
+                    // Check if it's a template error
+                    // 132001 = template doesn't exist / not approved
+                    // 132018 = template parameter issue
+                    // 132000 = template general error
+                    const isTemplateError = errorCode === 132001 ||
+                        errorCode === 132018 ||
+                        errorCode === 132000 ||
+                        errorMessage.toLowerCase().includes('template') ||
+                        errorMessage.toLowerCase().includes('parameter') ||
+                        errorMessage.toLowerCase().includes('translation');
                     // Check if it's a permanent error (4xx) vs transient (5xx)
                     const isPermanent = response.status >= 400 && response.status < 500;
                     // If transient 5xx error and not last attempt, retry

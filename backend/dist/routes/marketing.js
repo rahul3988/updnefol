@@ -858,7 +858,7 @@ const sendWhatsAppMessage = async (pool, req, res) => {
                 template: {
                     name: template.name,
                     language: {
-                        code: template.language || 'en_US'
+                        code: template.language || 'en'
                     }
                 }
             };
