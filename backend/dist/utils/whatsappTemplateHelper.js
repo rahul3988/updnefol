@@ -77,12 +77,11 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         // Special handling for nefol_otp_auth - Meta's "Copy Code" OTP format
         // This template uses zero variables and zero buttons - pure template only
         // Meta automatically generates OTP and enables zero-tap auto-fill
-        // If template in Meta has no parameters defined, omit components entirely
-        // If template in Meta has parameters but we want Meta to generate, send empty body with empty parameters
+        // Send empty components array with empty body parameters to explicitly indicate no parameters
         if (templateName === 'nefol_otp_auth') {
-            // Check if variables were passed (should be empty/undefined for Copy Code template)
-            // If variables array is empty or undefined, try omitting components first
-            // If that fails, the template in Meta might have parameters defined incorrectly
+            // Even for Copy Code templates, if Meta's API expects a components field,
+            // we send an empty components array with empty body parameters
+            // This explicitly tells Meta "no parameters" and satisfies the API requirement
             const requestBody = {
                 messaging_product: 'whatsapp',
                 to: normalizedPhone,
@@ -91,14 +90,17 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                     name: templateName,
                     language: {
                         code: languageCode
-                    }
+                    },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: [] // Empty parameters array - no variables sent
+                        }
+                    ]
                 }
             };
-            // Only include components if variables were explicitly provided (should not happen for Copy Code)
-            // For true Copy Code templates, components field should be omitted entirely
-            // Omitting components tells Meta to use the template as-is without any parameters
             // Debug: Log the request body to verify structure
-            console.log('📤 Sending nefol_otp_auth template (Copy Code - no components):', JSON.stringify(requestBody, null, 2));
+            console.log('📤 Sending nefol_otp_auth template (Copy Code - empty parameters):', JSON.stringify(requestBody, null, 2));
             // Retry logic: 1 retry for transient 5xx errors
             let lastError = null;
             for (let attempt = 0; attempt < 2; attempt++) {
