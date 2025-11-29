@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -26,6 +59,7 @@ const apiHelpers_1 = require("../utils/apiHelpers");
 const userActivitySchema_1 = require("../utils/userActivitySchema");
 const emailService_1 = require("../services/emailService");
 const whatsappService_1 = require("../services/whatsappService");
+const otpService_1 = require("../services/otpService");
 const SALT_ROUNDS = 10;
 // Optimized GET /api/cart
 async function getCart(pool, req, res) {
@@ -632,54 +666,36 @@ async function sendOTP(pool, req, res) {
 async function verifyOTPSignup(pool, req, res) {
     try {
         const { phone, otp, name, email, address } = req.body;
+        console.log(`🔍 OTP Signup Verification Request: phone="${phone}", otp="${otp ? otp.substring(0, 2) + '****' : 'missing'}", name="${name}"`);
         const validationError = (0, apiHelpers_1.validateRequired)(req.body, ['phone', 'otp', 'name']);
         if (validationError) {
             return (0, apiHelpers_1.sendError)(res, 400, validationError);
         }
-        // Normalize phone number
-        const normalizedPhone = phone.replace(/[\s+\-()]/g, '');
-        // Find the OTP record
-        const { rows } = await pool.query(`
-      SELECT * FROM otp_verifications
-      WHERE phone = $1 AND verified = false
-      ORDER BY created_at DESC
-      LIMIT 1
-    `, [normalizedPhone]);
-        if (rows.length === 0) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'OTP not found or already used. Please request a new OTP.');
+        // Verify OTP using the new OTP service (handles normalization and hashing)
+        const otpResult = await (0, otpService_1.verifyOtp)(pool, phone, otp);
+        if (!otpResult.ok) {
+            console.error(`❌ OTP verification failed for signup: ${otpResult.error?.message}`);
+            return (0, apiHelpers_1.sendError)(res, 400, otpResult.error?.message || 'OTP verification failed');
         }
-        const otpRecord = rows[0];
-        // Check if OTP is expired
-        if (new Date(otpRecord.expires_at) < new Date()) {
-            await pool.query('DELETE FROM otp_verifications WHERE id = $1', [otpRecord.id]);
-            return (0, apiHelpers_1.sendError)(res, 400, 'OTP has expired. Please request a new one.');
-        }
-        // Check if too many attempts
-        if (otpRecord.attempts >= 5) {
-            await pool.query('DELETE FROM otp_verifications WHERE id = $1', [otpRecord.id]);
-            return (0, apiHelpers_1.sendError)(res, 400, 'Too many failed attempts. Please request a new OTP.');
-        }
-        // Verify OTP
-        if (otpRecord.otp !== otp) {
-            // Increment attempts
-            await pool.query('UPDATE otp_verifications SET attempts = attempts + 1 WHERE id = $1', [otpRecord.id]);
-            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid OTP. Please try again.');
-        }
+        // Normalize phone number for user lookup (use same normalization as OTP service)
+        // Import normalizePhoneNumber to match OTP service behavior
+        const { normalizePhoneNumber } = await Promise.resolve().then(() => __importStar(require('../utils/whatsappTemplateHelper')));
+        const phoneDigits = phone.replace(/[\s+\-()]/g, '');
+        const normalizedPhone = /^\d{10,15}$/.test(phoneDigits)
+            ? normalizePhoneNumber(phoneDigits)
+            : phoneDigits.toLowerCase().trim();
         // Check if user already exists
         const existingUser = await pool.query('SELECT id FROM users WHERE phone = $1 OR email = $2', [normalizedPhone, email || '']);
         if (existingUser.rows.length > 0) {
-            // Mark OTP as verified
-            await pool.query('UPDATE otp_verifications SET verified = true WHERE id = $1', [otpRecord.id]);
             return (0, apiHelpers_1.sendError)(res, 409, 'User already exists');
         }
-        // Mark OTP as verified
-        await pool.query('UPDATE otp_verifications SET verified = true WHERE id = $1', [otpRecord.id]);
         // Create new user (no password required for OTP signup)
         const { rows: userRows } = await pool.query(`
       INSERT INTO users (name, email, phone, address, password, is_verified)
       VALUES ($1, $2, $3, $4, $5, true)
       RETURNING id, name, email, phone, created_at
     `, [name, email || null, normalizedPhone, address ? JSON.stringify(address) : null, 'otp_signup_' + Date.now()]);
+        console.log(`✅ OTP verified and user created: ${normalizedPhone}`);
         const user = userRows[0];
         const token = `user_token_${user.id}_${Date.now()}`;
         console.log('✅ User created via OTP signup:', normalizedPhone);
