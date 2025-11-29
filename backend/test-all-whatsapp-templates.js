@@ -24,9 +24,10 @@ const templates = [
   {
     name: 'nefol_reset_password',
     description: 'Password Reset Code',
-    variables: [], // Try with 0 parameters first (might be copy-code template like nefol_verify_code)
-    language: 'en',
-    note: 'If this fails, the template might need 1 parameter (reset code)'
+    variables: [
+      { type: 'text', text: 'RESET456' } // Reset code
+    ],
+    language: 'en'
   },
   {
     name: 'nefol_signup_success',

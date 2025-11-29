@@ -140,6 +140,31 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                 ]
             });
         }
+        else if (templateName === 'nefol_reset_password' && bodyParameters.length > 0) {
+            // Special handling for nefol_reset_password (Authentication template with copy-code button)
+            // Extract reset code from first parameter
+            const resetCode = bodyParameters[0]?.text || '';
+            components.push({
+                type: 'body',
+                parameters: [
+                    {
+                        type: 'text',
+                        text: resetCode
+                    }
+                ]
+            });
+            components.push({
+                type: 'button',
+                sub_type: 'url',
+                index: 0,
+                parameters: [
+                    {
+                        type: 'text',
+                        text: resetCode
+                    }
+                ]
+            });
+        }
         else {
             // Standard template handling
             if (bodyParameters.length > 0) {
