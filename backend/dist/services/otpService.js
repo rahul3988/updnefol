@@ -113,6 +113,7 @@ async function generateAndSendOtp(pool, phoneOrEmail, sendWhatsAppFn, sendEmailF
         await pool.query(`INSERT INTO otps (phone_or_email, otp_hash, expires_at)
        VALUES ($1, $2, $3)`, [normalizedPhone, otpHash, expiresAt]);
         console.log(`✅ OTP generated for ${isPhone ? 'phone' : 'email'}: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}, OTP: ${maskOTP(otp)}`);
+        console.log(`💾 OTP stored in DB: phone_or_email=${normalizedPhone}, hash_length=${otpHash.length}, expires_at=${expiresAt.toISOString()}`);
         // Send OTP
         let sent = false;
         if (isPhone && sendWhatsAppFn) {
@@ -164,8 +165,10 @@ async function verifyOtp(pool, phoneOrEmail, rawOtp) {
         const isPhone = /^\d{10,15}$/.test(normalized.replace(/[\s+\-()]/g, ''));
         // Use normalizePhoneNumber to ensure consistent format (adds country code if missing)
         const normalizedPhone = isPhone ? (0, whatsappTemplateHelper_1.normalizePhoneNumber)(normalized) : normalized;
-        // Hash provided OTP
-        const providedHash = hashOTP(rawOtp);
+        // Hash provided OTP (trim and ensure it's a string)
+        const cleanOtp = String(rawOtp).trim();
+        const providedHash = hashOTP(cleanOtp);
+        console.log(`🔍 Verifying OTP for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}, OTP length: ${cleanOtp.length}`);
         // Find unused OTP record
         const result = await pool.query(`SELECT id, otp_hash, attempts, expires_at, created_at
        FROM otps
@@ -173,26 +176,43 @@ async function verifyOtp(pool, phoneOrEmail, rawOtp) {
        ORDER BY created_at DESC
        LIMIT 1`, [normalizedPhone]);
         if (result.rows.length === 0) {
+            console.error(`❌ OTP not found for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}`);
             return { ok: false, error: { message: 'OTP not found or already used' } };
         }
         const otpRecord = result.rows[0];
         // Check expiry
         if (new Date(otpRecord.expires_at) < new Date()) {
             await pool.query('UPDATE otps SET used = TRUE WHERE id = $1', [otpRecord.id]);
+            console.error(`❌ OTP expired for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}`);
             return { ok: false, error: { message: 'OTP has expired' } };
         }
         // Check attempts
         if (otpRecord.attempts >= OTP_MAX_ATTEMPTS) {
             await pool.query('UPDATE otps SET used = TRUE WHERE id = $1', [otpRecord.id]);
+            console.error(`❌ Max attempts exceeded for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}`);
             return { ok: false, error: { message: 'Maximum attempts exceeded' } };
         }
         // Verify hash (constant-time comparison)
         const storedHash = otpRecord.otp_hash;
-        const isValid = crypto_1.default.timingSafeEqual(Buffer.from(providedHash, 'hex'), Buffer.from(storedHash, 'hex'));
-        if (!isValid) {
-            // Increment attempts
+        // Ensure both hashes are the same length before comparison
+        if (providedHash.length !== storedHash.length) {
+            console.error(`❌ Hash length mismatch: provided=${providedHash.length}, stored=${storedHash.length}`);
             await pool.query('UPDATE otps SET attempts = attempts + 1 WHERE id = $1', [otpRecord.id]);
-            return { ok: false, error: { message: 'Invalid OTP' } };
+            return { ok: false, error: { message: 'Invalid OTP format' } };
+        }
+        try {
+            const isValid = crypto_1.default.timingSafeEqual(Buffer.from(providedHash, 'hex'), Buffer.from(storedHash, 'hex'));
+            if (!isValid) {
+                // Increment attempts
+                await pool.query('UPDATE otps SET attempts = attempts + 1 WHERE id = $1', [otpRecord.id]);
+                console.error(`❌ Invalid OTP for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}, attempts: ${otpRecord.attempts + 1}`);
+                return { ok: false, error: { message: 'Invalid OTP' } };
+            }
+        }
+        catch (compareError) {
+            console.error(`❌ Hash comparison error: ${compareError.message}`);
+            await pool.query('UPDATE otps SET attempts = attempts + 1 WHERE id = $1', [otpRecord.id]);
+            return { ok: false, error: { message: 'OTP verification failed' } };
         }
         // Mark as used
         await pool.query('UPDATE otps SET used = TRUE WHERE id = $1', [otpRecord.id]);
