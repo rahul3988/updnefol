@@ -113,13 +113,41 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             }
             return { type: 'text', text: '' };
         });
-        // Build components array for other templates
+        // Build components array
         const components = [];
-        if (bodyParameters.length > 0) {
+        // Special handling for nefol_verify_code (Authentication template with copy-code button)
+        if (templateName === 'nefol_verify_code' && bodyParameters.length > 0) {
+            // Extract OTP from first parameter
+            const otp = bodyParameters[0]?.text || '';
             components.push({
                 type: 'body',
-                parameters: bodyParameters
+                parameters: [
+                    {
+                        type: 'text',
+                        text: otp
+                    }
+                ]
             });
+            components.push({
+                type: 'button',
+                sub_type: 'url',
+                index: 0,
+                parameters: [
+                    {
+                        type: 'text',
+                        text: otp
+                    }
+                ]
+            });
+        }
+        else {
+            // Standard template handling
+            if (bodyParameters.length > 0) {
+                components.push({
+                    type: 'body',
+                    parameters: bodyParameters
+                });
+            }
         }
         const requestBody = {
             messaging_product: 'whatsapp',
