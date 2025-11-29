@@ -119,9 +119,14 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         if (templateName === 'nefol_verify_code' && bodyParameters.length > 0) {
             // Extract OTP from first parameter
             const otp = bodyParameters[0]?.text || '';
+            // Body component needs TWO parameters: one for verification code, one for copy code button
             components.push({
                 type: 'body',
                 parameters: [
+                    {
+                        type: 'text',
+                        text: otp
+                    },
                     {
                         type: 'text',
                         text: otp
@@ -144,9 +149,14 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             // Special handling for nefol_reset_password (Authentication template with copy-code button)
             // Extract reset code from first parameter
             const resetCode = bodyParameters[0]?.text || '';
+            // Body component needs TWO parameters: one for verification code, one for copy code button
             components.push({
                 type: 'body',
                 parameters: [
+                    {
+                        type: 'text',
+                        text: resetCode
+                    },
                     {
                         type: 'text',
                         text: resetCode
