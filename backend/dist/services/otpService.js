@@ -17,6 +17,7 @@ exports.maskOTP = maskOTP;
 exports.generateAndSendOtp = generateAndSendOtp;
 exports.verifyOtp = verifyOtp;
 const crypto_1 = __importDefault(require("crypto"));
+const whatsappTemplateHelper_1 = require("../utils/whatsappTemplateHelper");
 const OTP_LENGTH = parseInt(process.env.OTP_LENGTH || '6');
 const OTP_TTL_SECONDS = parseInt(process.env.OTP_TTL_SECONDS || '300');
 const OTP_MAX_ATTEMPTS = parseInt(process.env.OTP_MAX_ATTEMPTS || '5');
@@ -100,7 +101,8 @@ async function generateAndSendOtp(pool, phoneOrEmail, sendWhatsAppFn, sendEmailF
         // Normalize phone/email
         const normalized = phoneOrEmail.toLowerCase().trim();
         const isPhone = /^\d{10,15}$/.test(normalized.replace(/[\s+\-()]/g, ''));
-        const normalizedPhone = isPhone ? normalized.replace(/[\s+\-()]/g, '') : normalized;
+        // Use normalizePhoneNumber to ensure consistent format (adds country code if missing)
+        const normalizedPhone = isPhone ? (0, whatsappTemplateHelper_1.normalizePhoneNumber)(normalized) : normalized;
         // Generate OTP
         const otp = generateOTP(OTP_LENGTH);
         const otpHash = hashOTP(otp);
@@ -160,7 +162,8 @@ async function verifyOtp(pool, phoneOrEmail, rawOtp) {
         // Normalize phone/email
         const normalized = phoneOrEmail.toLowerCase().trim();
         const isPhone = /^\d{10,15}$/.test(normalized.replace(/[\s+\-()]/g, ''));
-        const normalizedPhone = isPhone ? normalized.replace(/[\s+\-()]/g, '') : normalized;
+        // Use normalizePhoneNumber to ensure consistent format (adds country code if missing)
+        const normalizedPhone = isPhone ? (0, whatsappTemplateHelper_1.normalizePhoneNumber)(normalized) : normalized;
         // Hash provided OTP
         const providedHash = hashOTP(rawOtp);
         // Find unused OTP record
