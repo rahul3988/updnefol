@@ -140,6 +140,31 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                 ]
             });
         }
+        else if (templateName === 'nefol_login_otp' && bodyParameters.length > 0) {
+            // Special handling for nefol_login_otp (Authentication template with copy-code button)
+            // Extract OTP from first parameter
+            const otp = bodyParameters[0]?.text || '';
+            components.push({
+                type: 'body',
+                parameters: [
+                    {
+                        type: 'text',
+                        text: otp
+                    }
+                ]
+            });
+            components.push({
+                type: 'button',
+                sub_type: 'url',
+                index: 0,
+                parameters: [
+                    {
+                        type: 'text',
+                        text: otp
+                    }
+                ]
+            });
+        }
         else if (templateName === 'nefol_reset_password' && bodyParameters.length > 0) {
             // Special handling for nefol_reset_password (Authentication template with copy-code button)
             // Extract reset code from first parameter

@@ -22,6 +22,14 @@ const templates = [
     language: 'en'
   },
   {
+    name: 'nefol_login_otp',
+    description: 'Login OTP Verification Code',
+    variables: [
+      { type: 'text', text: '123456' } // OTP code
+    ],
+    language: 'en'
+  },
+  {
     name: 'nefol_reset_password',
     description: 'Password Reset Code',
     variables: [
@@ -144,8 +152,8 @@ function logInfo(message) {
   log(`ℹ️  ${message}`, 'blue')
 }
 
-async function testTemplate(template, index) {
-  logHeader(`Template ${index + 1}/12: ${template.name}`)
+async function testTemplate(template, index, totalTemplates) {
+  logHeader(`Template ${index + 1}/${totalTemplates}: ${template.name}`)
   logInfo(`Description: ${template.description}`)
   logInfo(`Phone: ${TEST_PHONE}`)
   logInfo(`Variables: ${JSON.stringify(template.variables.map(v => v.text))}`)
@@ -182,6 +190,7 @@ async function testTemplate(template, index) {
 async function runAllTests() {
   logHeader('WhatsApp Templates Test Suite')
   logInfo(`Testing ${templates.length} templates`)
+  // Update count in template loop messages
   logInfo(`Environment: ${process.env.NODE_ENV || 'development'}`)
   logInfo(`Phone Number ID: ${process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.META_WA_NUMBER_ID || 'NOT SET'}`)
   logInfo(`Access Token: ${process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_WA_ACCESS_TOKEN ? 'SET' : 'NOT SET'}`)
@@ -193,7 +202,7 @@ async function runAllTests() {
   // Test each template with a delay to avoid rate limiting
   for (let i = 0; i < templates.length; i++) {
     const template = templates[i]
-    const result = await testTemplate(template, i)
+    const result = await testTemplate(template, i, templates.length)
     results.push(result)
     
     // Wait 2 seconds between requests to avoid rate limiting
