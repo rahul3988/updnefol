@@ -126,6 +126,7 @@ async function sendOTP(pool, req, res) {
 async function verifyOTP(pool, req, res) {
     try {
         const { phone, email, otp } = req.body;
+        console.log(`🔍 OTP Verification Request: phone="${phone}", email="${email}", otp="${otp ? otp.substring(0, 2) + '****' : 'missing'}"`);
         if (!phone && !email) {
             return (0, apiHelpers_1.sendError)(res, 400, 'Either phone or email is required');
         }

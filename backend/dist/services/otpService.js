@@ -169,14 +169,43 @@ async function verifyOtp(pool, phoneOrEmail, rawOtp) {
         const cleanOtp = String(rawOtp).trim();
         const providedHash = hashOTP(cleanOtp);
         console.log(`🔍 Verifying OTP for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}, OTP length: ${cleanOtp.length}`);
-        // Find unused OTP record
-        const result = await pool.query(`SELECT id, otp_hash, attempts, expires_at, created_at
+        console.log(`🔍 Input phone/email: "${phoneOrEmail}" → Normalized: "${normalizedPhone}"`);
+        // Find unused OTP record - also check for recent OTPs (within last 10 minutes) for debugging
+        const result = await pool.query(`SELECT id, otp_hash, attempts, expires_at, created_at, phone_or_email
        FROM otps
        WHERE phone_or_email = $1 AND used = FALSE
        ORDER BY created_at DESC
        LIMIT 1`, [normalizedPhone]);
+        // Debug: Check if there are any OTPs for this phone (even if used)
         if (result.rows.length === 0) {
-            console.error(`❌ OTP not found for: ${isPhone ? normalizedPhone : normalized.substring(0, 3) + '***'}`);
+            const debugResult = await pool.query(`SELECT phone_or_email, used, created_at, expires_at
+         FROM otps
+         WHERE phone_or_email = $1
+         ORDER BY created_at DESC
+         LIMIT 5`, [normalizedPhone]);
+            console.error(`❌ OTP not found for: ${normalizedPhone}`);
+            console.error(`   Searching for unused OTP with phone_or_email: "${normalizedPhone}"`);
+            if (debugResult.rows.length > 0) {
+                console.error(`   Found ${debugResult.rows.length} OTP record(s) (may be used/expired):`);
+                debugResult.rows.forEach((row, idx) => {
+                    console.error(`     ${idx + 1}. phone_or_email="${row.phone_or_email}", used=${row.used}, created=${row.created_at}, expires=${row.expires_at}`);
+                });
+            }
+            else {
+                console.error(`   No OTP records found at all for: "${normalizedPhone}"`);
+                // Try to find similar phone numbers
+                const similarResult = await pool.query(`SELECT DISTINCT phone_or_email, used, created_at
+           FROM otps
+           WHERE phone_or_email LIKE $1
+           ORDER BY created_at DESC
+           LIMIT 5`, [`%${normalizedPhone.slice(-4)}%`]);
+                if (similarResult.rows.length > 0) {
+                    console.error(`   Found similar phone numbers in DB:`);
+                    similarResult.rows.forEach((row) => {
+                        console.error(`     - "${row.phone_or_email}" (used=${row.used}, created=${row.created_at})`);
+                    });
+                }
+            }
             return { ok: false, error: { message: 'OTP not found or already used' } };
         }
         const otpRecord = result.rows[0];
