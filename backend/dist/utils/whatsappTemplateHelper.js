@@ -115,10 +115,6 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         });
         // Build components array for other templates
         const components = [];
-        // Add type: 'text' component
-        components.push({
-            type: 'text'
-        });
         if (bodyParameters.length > 0) {
             components.push({
                 type: 'body',
