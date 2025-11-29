@@ -86,9 +86,9 @@ const templates = [
     name: 'nefol_refund_1',
     description: 'Refund Notification',
     variables: [
-      { type: 'text', text: 'NEFOL-2024-001' }, // Order number
-      { type: 'text', text: '₹1,299' }, // Refund amount
-      { type: 'text', text: '3-5 business days' } // Processing time
+      { type: 'text', text: 'Rahul' }, // User name ({{1}})
+      { type: 'text', text: 'NEFOL-2024-001' }, // Order ID ({{2}})
+      { type: 'text', text: '₹1,299' } // Refund amount ({{3}})
     ],
     language: 'en'
   },

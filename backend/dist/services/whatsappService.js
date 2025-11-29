@@ -80,7 +80,8 @@ class WhatsAppService {
     /**
      * Send OTP via WhatsApp using nefol_verify_code template
      * Template: nefol_verify_code
-     * Variables: [otp] - Template expects 1 parameter: the OTP code
+     * Variables: [otp] - Requires 1 body parameter: {{1}} = OTP code
+     * Also includes button component with copy-code functionality
      *
      * @param {string} phone - Recipient phone number
      * @param {string} otp - OTP code to send (6-digit)
@@ -297,7 +298,8 @@ class WhatsAppService {
     /**
      * Send password reset code via WhatsApp using nefol_reset_password template
      * Template: nefol_reset_password
-     * Variables: [resetCode] - Only 1 parameter (reset code)
+     * Variables: [resetCode] - Requires 1 parameter: {{1}} = Reset Code or Link
+     * Also includes button component with copy-code functionality
      *
      * @param {string} phone - Recipient phone number
      * @param {string} code - Reset code (6-digit OTP)
@@ -389,7 +391,7 @@ class WhatsAppService {
     /**
      * Send cart recovery message via WhatsApp using nefol_cart_recover template
      * Template: nefol_cart_recover
-     * Variables: [name, cartUrl]
+     * Variables: [name, cartUrl] - Requires 2 parameters: {{1}} = User Name, {{2}} = Cart Link/Items
      *
      * @param {any} user - User object with name, phone
      * @param {string} cartUrl - URL to view cart
@@ -429,7 +431,7 @@ class WhatsAppService {
     /**
      * Send order shipped notification via WhatsApp using nefol_order_shipped template
      * Template: nefol_order_shipped
-     * Variables: [name, orderId, trackingUrl]
+     * Variables: [name, orderId, tracking] - Requires 3 parameters: {{1}} = User Name, {{2}} = Order ID, {{3}} = Tracking Number
      *
      * @param {any} user - User object with name, phone
      * @param {string} orderId - Order ID
@@ -507,7 +509,7 @@ class WhatsAppService {
     /**
      * Send refund notification via WhatsApp using nefol_refund_1 template
      * Template: nefol_refund_1
-     * Variables: [name, orderId, amount]
+     * Variables: [name, orderId, amount] - Requires 3 parameters: {{1}} = User Name, {{2}} = Order ID, {{3}} = Refund Amount
      *
      * @param {any} user - User object with name, phone
      * @param {string} orderId - Order ID
@@ -547,7 +549,7 @@ class WhatsAppService {
     /**
      * Send COD verification request via WhatsApp using nefol_cod_verify template
      * Template: nefol_cod_verify
-     * Variables: [name, orderId] - Only 2 parameters: user name and order number
+     * Variables: [name, orderId] - Requires 2 parameters: {{1}} = User Name, {{2}} = Order ID/OTP
      *
      * @param {any} user - User object with name, phone
      * @param {string} orderId - Order ID
