@@ -689,12 +689,15 @@ async function verifyOTPSignup(pool, req, res) {
         if (existingUser.rows.length > 0) {
             return (0, apiHelpers_1.sendError)(res, 409, 'User already exists');
         }
+        // Generate placeholder email if not provided (email is required in users table)
+        // Format: phone_918081013175@thenefol.com
+        const userEmail = email || `phone_${normalizedPhone}@thenefol.com`;
         // Create new user (no password required for OTP signup)
         const { rows: userRows } = await pool.query(`
       INSERT INTO users (name, email, phone, address, password, is_verified)
       VALUES ($1, $2, $3, $4, $5, true)
       RETURNING id, name, email, phone, created_at
-    `, [name, email || null, normalizedPhone, address ? JSON.stringify(address) : null, 'otp_signup_' + Date.now()]);
+    `, [name, userEmail, normalizedPhone, address ? JSON.stringify(address) : null, 'otp_signup_' + Date.now()]);
         console.log(`✅ OTP verified and user created: ${normalizedPhone}`);
         const user = userRows[0];
         const token = `user_token_${user.id}_${Date.now()}`;
