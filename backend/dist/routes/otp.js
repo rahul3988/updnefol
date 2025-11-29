@@ -33,11 +33,16 @@ async function sendOTP(pool, req, res) {
         }
         const phoneOrEmail = phone || email;
         const whatsappService = new whatsappService_1.WhatsAppService(pool);
-        // For WhatsApp: Meta generates OTP automatically - no backend generation needed
+        // For WhatsApp: Generate OTP in backend and send via template
         if (phone) {
             try {
-                // Send WhatsApp OTP template - Meta handles OTP generation and zero-tap auto-fill
-                const result = await whatsappService.sendOTPWhatsApp(phone);
+                // Generate OTP and send via WhatsApp template
+                const sendWhatsAppOtp = async (phoneNum, otp) => {
+                    const result = await whatsappService.sendOTPWhatsApp(phoneNum, otp);
+                    return result;
+                };
+                const result = await (0, otpService_1.generateAndSendOtp)(pool, phone, sendWhatsAppOtp, undefined // No email fallback for phone
+                );
                 if (!result.ok) {
                     console.error('❌ WhatsApp OTP send failed:', result.error?.message);
                     return (0, apiHelpers_1.sendError)(res, 500, result.error?.message || 'Failed to send WhatsApp OTP');

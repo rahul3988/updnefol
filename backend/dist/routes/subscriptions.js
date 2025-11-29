@@ -6,6 +6,7 @@ exports.getWhatsAppSubscriptions = getWhatsAppSubscriptions;
 exports.getWhatsAppStats = getWhatsAppStats;
 const apiHelpers_1 = require("../utils/apiHelpers");
 const whatsappUtils_1 = require("../utils/whatsappUtils");
+const emailService_1 = require("../services/emailService");
 // Subscribe to WhatsApp
 async function subscribeWhatsApp(pool, req, res) {
     try {
@@ -52,10 +53,12 @@ async function subscribeWhatsApp(pool, req, res) {
         const subscription = subscriptionRows[0];
         // Find user by phone number if they have an account
         let userId = null;
+        let userEmail = null;
         try {
-            const userResult = await pool.query('SELECT id FROM users WHERE phone = $1', [normalizedPhone]);
+            const userResult = await pool.query('SELECT id, email FROM users WHERE phone = $1', [normalizedPhone]);
             if (userResult.rows.length > 0) {
                 userId = userResult.rows[0].id;
+                userEmail = userResult.rows[0].email || null;
             }
         }
         catch (err) {
@@ -167,6 +170,12 @@ async function subscribeWhatsApp(pool, req, res) {
                 // Log error but don't fail the subscription
                 console.error('Error initiating welcome offer send:', err);
             }
+            // Send subscription activated email if we have a matching user email
+            if (userEmail) {
+                (0, emailService_1.sendSubscriptionActivatedEmail)(userEmail, { name: 'WhatsApp updates' }).catch(emailErr => {
+                    console.error('Error sending subscription activated email:', emailErr);
+                });
+            }
         }
         (0, apiHelpers_1.sendSuccess)(res, {
             message: 'Successfully subscribed to WhatsApp updates',
@@ -187,9 +196,26 @@ async function unsubscribeWhatsApp(pool, req, res) {
             return (0, apiHelpers_1.sendError)(res, 400, validationError);
         }
         const normalizedPhone = phone.replace(/[\s+\-()]/g, '');
+        // Try to find matching user email (for subscription cancelled email)
+        let userEmail = null;
+        try {
+            const userResult = await pool.query('SELECT email FROM users WHERE phone = $1', [normalizedPhone]);
+            if (userResult.rows.length > 0) {
+                userEmail = userResult.rows[0].email || null;
+            }
+        }
+        catch (lookupErr) {
+            console.error('Error finding user email for unsubscribe:', lookupErr);
+        }
         const { rowCount } = await pool.query('UPDATE whatsapp_subscriptions SET is_active = false, unsubscribed_at = NOW() WHERE phone = $1', [normalizedPhone]);
         if (rowCount === 0) {
             return (0, apiHelpers_1.sendError)(res, 404, 'Subscription not found');
+        }
+        // Send subscription cancelled email if we have an email
+        if (userEmail) {
+            (0, emailService_1.sendSubscriptionReminderOrCancelledEmail)(userEmail, { name: 'WhatsApp updates' }, 'cancelled').catch(emailErr => {
+                console.error('Error sending subscription cancelled email:', emailErr);
+            });
         }
         (0, apiHelpers_1.sendSuccess)(res, { message: 'Successfully unsubscribed from WhatsApp updates' });
     }

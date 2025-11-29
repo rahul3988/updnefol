@@ -7,6 +7,14 @@ exports.sendPaymentFailedEmail = sendPaymentFailedEmail;
 exports.sendOrderStatusUpdateEmail = sendOrderStatusUpdateEmail;
 exports.sendCartAbandonmentEmail = sendCartAbandonmentEmail;
 exports.sendPasswordResetEmail = sendPasswordResetEmail;
+exports.sendPasswordResetConfirmationEmail = sendPasswordResetConfirmationEmail;
+exports.sendVerificationEmail = sendVerificationEmail;
+exports.sendLoginAlertEmail = sendLoginAlertEmail;
+exports.sendAccountSecurityAlertEmail = sendAccountSecurityAlertEmail;
+exports.sendOrderShippedEmail = sendOrderShippedEmail;
+exports.sendOrderDeliveredEmail = sendOrderDeliveredEmail;
+exports.sendSubscriptionActivatedEmail = sendSubscriptionActivatedEmail;
+exports.sendSubscriptionReminderOrCancelledEmail = sendSubscriptionReminderOrCancelledEmail;
 // Email Service - All 6 Email Automation Events
 const email_1 = require("../utils/email");
 // 1. Welcome Email - User Signup
@@ -21,6 +29,9 @@ async function sendWelcomeEmail(userEmail, userName) {
         <title>Welcome to Thenefol</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Welcome to Thenefol!</h1>
         </div>
@@ -61,6 +72,9 @@ async function sendCartAddedEmail(userEmail, userName, productName, productPrice
         <title>Item Added to Cart</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h2 style="color: #fff; margin: 0;">Item Added to Your Cart</h2>
         </div>
@@ -111,6 +125,9 @@ async function sendOrderConfirmationEmail(order, sendToAdmin = false) {
         <title>Order Confirmation</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Order Confirmed!</h1>
         </div>
@@ -202,6 +219,9 @@ async function sendPaymentFailedEmail(userEmail, userName, orderNumber, errorMes
         <title>Payment Failed</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: #dc3545; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Payment Failed</h1>
         </div>
@@ -271,6 +291,9 @@ async function sendOrderStatusUpdateEmail(order) {
         <title>Order Status Update</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: ${statusInfo.color}; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">${statusInfo.title}</h1>
         </div>
@@ -329,6 +352,9 @@ async function sendCartAbandonmentEmail(userEmail, userName, cartItems) {
         <title>Complete Your Purchase</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: #ffc107; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #333; margin: 0;">Don't Miss Out!</h1>
         </div>
@@ -392,6 +418,9 @@ async function sendPasswordResetEmail(userEmail, userName, resetLink) {
         <title>Reset Your Password</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
         <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Password Reset Request</h1>
         </div>
@@ -430,5 +459,346 @@ async function sendPasswordResetEmail(userEmail, userName, resetLink) {
     catch (error) {
         console.error('❌ Error sending password reset email:', error);
         throw error; // Throw here so we know if email sending failed
+    }
+}
+// 8. Password Reset Confirmation Email
+async function sendPasswordResetConfirmationEmail(userEmail) {
+    try {
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Password Changed Successfully</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Your password has been changed</h1>
+        </div>
+        <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            This is a confirmation that the password for your Thenefol account was just updated.
+          </p>
+          <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
+            If this was you, no further action is needed. You can now sign in with your new password.
+          </p>
+          <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
+            If you did not make this change, please secure your account immediately by resetting your password again and checking recent activity.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://thenefol.com/#/user/login" style="background: #5EC4C4; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Go to login
+            </a>
+          </div>
+          <p style="font-size: 12px; color: #999; margin-top: 20px;">
+            For your security, we never include your password in any email.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: 'Your Thenefol password has been changed',
+            html
+        });
+        console.log(`✅ Password reset confirmation email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending password reset confirmation email:', error);
+        // Do not throw - this should not break the reset flow
+    }
+}
+// 9. Email Verification OTP Email
+async function sendVerificationEmail(userEmail, otp) {
+    try {
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Verify Your Email</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Verify your email</h1>
+        </div>
+        <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            Please use the one-time code below to verify your email address for your Thenefol account.
+          </p>
+          <div style="background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #E0EAEA; text-align: center; margin: 20px 0;">
+            <span style="display: inline-block; font-size: 26px; letter-spacing: 8px; font-weight: bold; color: #333;">
+              ${otp}
+            </span>
+          </div>
+          <p style="font-size: 14px; color: #555; margin-bottom: 8px;">
+            This code will expire in a few minutes. For your security, do not share it with anyone.
+          </p>
+          <p style="font-size: 12px; color: #999; margin-top: 16px;">
+            If you did not request this verification, you can ignore this email.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: 'Verify your email address - Thenefol',
+            html
+        });
+        console.log(`✅ Verification email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending verification email:', error);
+        // Do not throw - should not stop signup/login flows
+    }
+}
+// 10. Login Alert Email (New Device/IP)
+async function sendLoginAlertEmail(userEmail, ipAddress, deviceInfo) {
+    try {
+        const safeDevice = deviceInfo || 'Unknown device';
+        const safeIp = ipAddress || 'Unknown IP';
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>New Login Detected</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">New login to your account</h1>
+        </div>
+        <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            A new login to your Thenefol account was just detected.
+          </p>
+          <div style="background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #E0EAEA; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Device:</strong> ${safeDevice}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>IP Address:</strong> ${safeIp}</p>
+            <p style="margin: 0; font-size: 13px; color: #777;"><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+          </div>
+          <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
+            If this was you, you can safely ignore this email.
+          </p>
+          <p style="font-size: 14px; color: #555; margin-bottom: 24px;">
+            If you do not recognize this activity, we recommend that you change your password immediately and review your recent account activity.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://thenefol.com/#/user/account" style="background: #5EC4C4; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Review account
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: 'New login detected on your Thenefol account',
+            html
+        });
+        console.log(`✅ Login alert email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending login alert email:', error);
+    }
+}
+// 11. Account Security Alert Email
+async function sendAccountSecurityAlertEmail(userEmail, action) {
+    try {
+        const safeAction = action || 'a security-related change';
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Account Security Alert</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #dc3545; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Account security alert</h1>
+        </div>
+        <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            A change related to your account security was detected: <strong>${safeAction}</strong>.
+          </p>
+          <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
+            If this was you, no further action is needed. If you do not recognize this, please secure your account immediately.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://thenefol.com/#/user/account" style="background: #5EC4C4; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Review security settings
+            </a>
+          </div>
+          <p style="font-size: 12px; color: #999; margin-top: 16px;">
+            For any help, you can contact our support team at ${(0, email_1.getAdminEmail)()}.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: 'Security alert on your Thenefol account',
+            html
+        });
+        console.log(`✅ Account security alert email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending account security alert email:', error);
+    }
+}
+// 12. Order Shipped Email (wrapper around status update)
+async function sendOrderShippedEmail(order) {
+    try {
+        // Reuse the existing status update email template and logic.
+        await sendOrderStatusUpdateEmail(order);
+        console.log(`✅ Order shipped email (status update) sent for order: ${order?.order_number}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending order shipped email:', error);
+    }
+}
+// 13. Order Delivered Email (wrapper around status update)
+async function sendOrderDeliveredEmail(order) {
+    try {
+        await sendOrderStatusUpdateEmail(order);
+        console.log(`✅ Order delivered email (status update) sent for order: ${order?.order_number}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending order delivered email:', error);
+    }
+}
+// 14. Subscription Activated Email
+async function sendSubscriptionActivatedEmail(userEmail, plan) {
+    try {
+        const planName = plan?.name || 'your subscription';
+        const priceText = typeof plan?.price === 'number' ? `₹${plan.price.toFixed(2)}` : '';
+        const intervalText = plan?.interval ? ` / ${plan.interval}` : '';
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Subscription Activated</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Your subscription is active</h1>
+        </div>
+        <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            Thank you for subscribing to ${planName} at Thenefol.
+          </p>
+          ${priceText ? `
+          <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
+            Plan price: <strong>${priceText}${intervalText}</strong>
+          </p>` : ''}
+          <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
+            You can manage your subscription and billing details from your account at any time.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://thenefol.com/#/user/subscriptions" style="background: #5EC4C4; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              Manage subscription
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: 'Your Thenefol subscription is active',
+            html
+        });
+        console.log(`✅ Subscription activated email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending subscription activated email:', error);
+    }
+}
+// 15. Subscription Reminder / Cancelled Email
+async function sendSubscriptionReminderOrCancelledEmail(userEmail, plan, type) {
+    try {
+        const planName = plan?.name || 'your subscription';
+        const normalizedType = (type || '').toLowerCase();
+        const isExpiring = normalizedType === 'expiring';
+        const title = isExpiring ? 'Your subscription is ending soon' : 'Your subscription has been cancelled';
+        const subject = isExpiring
+            ? 'Your Thenefol subscription is ending soon'
+            : 'Your Thenefol subscription has been cancelled';
+        const mainMessage = isExpiring
+            ? `Your plan for ${planName} will end soon. If you want to keep your benefits, you can renew your subscription before it expires.`
+            : `Your plan for ${planName} has been cancelled. You will keep access until the end of your current billing period, if applicable.`;
+        const ctaText = isExpiring ? 'Renew subscription' : 'View subscriptions';
+        const ctaLink = 'https://thenefol.com/#/user/subscriptions';
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${title}</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">${title}</h1>
+        </div>
+        <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            ${mainMessage}
+          </p>
+          <p style="font-size: 14px; color: #555; margin-bottom: 24px;">
+            You can review your subscription options and make any changes from your account.
+          </p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${ctaLink}" style="background: #5EC4C4; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+              ${ctaText}
+            </a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject,
+            html
+        });
+        console.log(`✅ Subscription ${isExpiring ? 'reminder' : 'cancelled'} email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending subscription reminder/cancelled email:', error);
     }
 }

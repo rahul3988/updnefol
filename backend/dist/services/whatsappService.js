@@ -79,19 +79,21 @@ class WhatsAppService {
     }
     /**
      * Send OTP via WhatsApp using nefol_verify_code template
-     * Template: nefol_verify_code (Meta's "Copy Code" authentication template)
-     * Variables: None - Meta automatically generates and sends the OTP code
+     * Template: nefol_verify_code
+     * Variables: [otp] - Template expects 1 parameter: the OTP code
      *
      * @param {string} phone - Recipient phone number
+     * @param {string} otp - OTP code to send (6-digit)
      * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
      */
-    async sendOTPWhatsApp(phone) {
+    async sendOTPWhatsApp(phone, otp) {
         try {
-            // nefol_verify_code uses Meta's "Copy Code" OTP format - zero variables, zero buttons
-            // Meta automatically generates OTP and enables zero-tap auto-fill
-            // No backend OTP generation - do not pass variables parameter
-            // The template helper will omit the components field entirely for this template
-            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_verify_code', undefined, 'en');
+            // Template expects 1 parameter: the OTP code
+            // Template format: "*{{1}}* is your verification code. For your security, do not share this code."
+            const variables = [
+                { type: 'text', text: otp }
+            ];
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_verify_code', variables, 'en');
             if (result.ok) {
                 return { ok: true, providerId: result.providerId };
             }
@@ -107,15 +109,13 @@ class WhatsAppService {
     }
     /**
      * Send OTP via WhatsApp (legacy method, uses template)
-     * Meta automatically generates the OTP - no backend generation needed
      *
      * @param {string} to - Recipient phone number
-     * @param {string} otp - OTP parameter (ignored - Meta generates OTP automatically)
+     * @param {string} otp - OTP code to send
      * @returns {Promise<{success: boolean, data?: any, error?: string}>}
      */
     async sendOTP(to, otp) {
-        // Call sendOTPWhatsApp without passing otp - Meta generates it automatically
-        const result = await this.sendOTPWhatsApp(to);
+        const result = await this.sendOTPWhatsApp(to, otp);
         return {
             success: result.ok,
             data: result.providerId ? { messageId: result.providerId } : undefined,

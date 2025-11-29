@@ -279,14 +279,22 @@ async function login(pool, req, res) {
                 email: user.email
             }
         });
+        const userAgent = req.headers['user-agent'];
+        const ipAddress = req.ip || req.connection.remoteAddress;
         // Log login activity
         await (0, userActivitySchema_1.logUserActivity)(pool, {
             user_id: user.id,
             activity_type: 'auth',
             activity_subtype: 'login',
-            user_agent: req.headers['user-agent'],
-            ip_address: req.ip || req.connection.remoteAddress
+            user_agent: userAgent,
+            ip_address: ipAddress
         });
+        // Send login alert email (async, do not block response)
+        if (user.email) {
+            (0, emailService_1.sendLoginAlertEmail)(user.email, ipAddress, userAgent).catch(err => {
+                console.error('Failed to send login alert email:', err);
+            });
+        }
     }
     catch (err) {
         (0, apiHelpers_1.sendError)(res, 500, 'Login failed', err);
@@ -324,6 +332,15 @@ async function register(pool, req, res) {
         (0, emailService_1.sendWelcomeEmail)(user.email, user.name).catch(err => {
             console.error('Failed to send welcome email:', err);
         });
+        // Send email verification OTP (async, don't wait)
+        try {
+            const rawOtp = Math.floor(100000 + Math.random() * 900000).toString();
+            await (0, emailService_1.sendVerificationEmail)(user.email, rawOtp);
+            console.log(`✅ Verification email OTP sent to: ${user.email}`);
+        }
+        catch (verr) {
+            console.error('Failed to send verification email:', verr);
+        }
         // Send WhatsApp signup success notification (async, don't wait)
         if (user.phone) {
             const whatsappService = new whatsappService_1.WhatsAppService(pool);

@@ -260,6 +260,13 @@ async function resetPassword(pool, req, res) {
            updated_at = NOW()
        WHERE id = $2`, [hashedPassword, user.id]);
         console.log(`✅ Password reset successful for user: ${user.id} (${email})`);
+        // Send password reset confirmation email (async, do not block response)
+        try {
+            await (0, emailService_1.sendPasswordResetConfirmationEmail)(email);
+        }
+        catch (emailErr) {
+            console.error('❌ Failed to send password reset confirmation email:', emailErr);
+        }
         (0, apiHelpers_1.sendSuccess)(res, {
             message: 'Password has been reset successfully. You can now login with your new password.'
         });

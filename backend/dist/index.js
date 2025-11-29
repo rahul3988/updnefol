@@ -3093,9 +3093,21 @@ app.put('/api/orders/:id', authenticateAndAttach, (0, apiHelpers_1.requirePermis
         if (Object.prototype.hasOwnProperty.call(body, 'status')) {
             const newStatus = body.status?.toLowerCase();
             if (['shipped', 'out_for_delivery', 'delivered'].includes(newStatus)) {
+                // For backward compatibility, keep using the generic status update email
                 (0, emailService_1.sendOrderStatusUpdateEmail)(rows[0]).catch(err => {
                     console.error('Failed to send order status update email:', err);
                 });
+                // Also call more specific shipped/delivered helpers for clearer email copy
+                if (newStatus === 'shipped' || newStatus === 'out_for_delivery') {
+                    (0, emailService_1.sendOrderShippedEmail)(rows[0]).catch(err => {
+                        console.error('Failed to send order shipped email:', err);
+                    });
+                }
+                else if (newStatus === 'delivered') {
+                    (0, emailService_1.sendOrderDeliveredEmail)(rows[0]).catch(err => {
+                        console.error('Failed to send order delivered email:', err);
+                    });
+                }
                 // Send WhatsApp notification
                 try {
                     const { WhatsAppService } = await Promise.resolve().then(() => __importStar(require('./services/whatsappService')));
