@@ -39,6 +39,15 @@ function startCartAbandonmentCron(pool) {
         GROUP BY c.user_id, u.email, u.name, u.phone, c.updated_at
       `, [oneHourAgo]);
             console.log(`📧 Found ${abandonedCarts.rows.length} abandoned carts`);
+            // Ensure tracking table exists before we start querying it
+            await pool.query(`
+        CREATE TABLE IF NOT EXISTS cart_abandonment_emails (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          cart_updated_at TIMESTAMP NOT NULL,
+          sent_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
             for (const cart of abandonedCarts.rows) {
                 try {
                     // Get cart items for this user
@@ -92,14 +101,6 @@ function startCartAbandonmentCron(pool) {
                                 }
                             }
                             // Record that we sent the reminder
-                            await pool.query(`
-                CREATE TABLE IF NOT EXISTS cart_abandonment_emails (
-                  id SERIAL PRIMARY KEY,
-                  user_id INTEGER NOT NULL,
-                  cart_updated_at TIMESTAMP NOT NULL,
-                  sent_at TIMESTAMP DEFAULT NOW()
-                )
-              `);
                             await pool.query(`
                 INSERT INTO cart_abandonment_emails (user_id, cart_updated_at)
                 VALUES ($1, $2)
