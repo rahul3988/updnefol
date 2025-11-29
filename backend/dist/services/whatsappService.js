@@ -547,7 +547,7 @@ class WhatsAppService {
     /**
      * Send COD verification request via WhatsApp using nefol_cod_verify template
      * Template: nefol_cod_verify
-     * Variables: [name, orderId, amount]
+     * Variables: [name, orderId] - Only 2 parameters: user name and order number
      *
      * @param {any} user - User object with name, phone
      * @param {string} orderId - Order ID
@@ -558,24 +558,10 @@ class WhatsAppService {
             if (!user.phone) {
                 return { ok: false, error: { message: 'User phone number not available' } };
             }
-            // Get order amount from database if pool available
-            let orderAmount = '₹0';
-            if (this.pool) {
-                try {
-                    // Try to match by order_number (string) or id (integer)
-                    const orderResult = await this.pool.query('SELECT total FROM orders WHERE order_number = $1 OR id::text = $1', [orderId]);
-                    if (orderResult.rows.length > 0) {
-                        orderAmount = `₹${orderResult.rows[0].total || 0}`;
-                    }
-                }
-                catch (dbErr) {
-                    console.error('Failed to fetch order amount:', dbErr);
-                }
-            }
+            // Template expects only 2 parameters: name and order number
             const variables = [
                 { type: 'text', text: user.name || 'User' },
-                { type: 'text', text: orderId },
-                { type: 'text', text: orderAmount }
+                { type: 'text', text: orderId }
             ];
             const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(user.phone, 'nefol_cod_verify', variables);
             if (result.ok) {
@@ -583,7 +569,7 @@ class WhatsAppService {
             }
             // Fallback to plain text
             if (result.error?.isTemplateError) {
-                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, please confirm your COD order #${orderId} for ${orderAmount}. Reply YES to confirm or NO to cancel.`);
+                const fallbackResult = await this.sendText(user.phone, `Hi ${user.name}, please confirm your COD order #${orderId}. Reply YES to confirm or NO to cancel.`);
                 return {
                     ok: fallbackResult.success,
                     providerId: fallbackResult.data?.messages?.[0]?.id,

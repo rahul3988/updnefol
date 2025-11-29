@@ -24,10 +24,9 @@ const templates = [
   {
     name: 'nefol_reset_password',
     description: 'Password Reset Code',
-    variables: [
-      { type: 'text', text: 'RESET456' } // Reset code
-    ],
-    language: 'en'
+    variables: [], // Try with 0 parameters first (might be copy-code template like nefol_verify_code)
+    language: 'en',
+    note: 'If this fails, the template might need 1 parameter (reset code)'
   },
   {
     name: 'nefol_signup_success',
@@ -89,8 +88,7 @@ const templates = [
     description: 'COD Verification Request',
     variables: [
       { type: 'text', text: 'Rahul' }, // User name
-      { type: 'text', text: 'NEFOL-2024-001' }, // Order number
-      { type: 'text', text: '₹1,299' } // Amount
+      { type: 'text', text: 'NEFOL-2024-001' } // Order number
     ],
     language: 'en'
   },
