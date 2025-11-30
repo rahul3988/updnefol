@@ -6,6 +6,7 @@ exports.getShiprocketConfig = getShiprocketConfig;
 exports.getPickupLocations = getPickupLocations;
 exports.createShipment = createShipment;
 exports.createAwbAndLabel = createAwbAndLabel;
+exports.autoCreateShiprocketShipment = autoCreateShiprocketShipment;
 exports.trackShipment = trackShipment;
 exports.checkPincodeServiceability = checkPincodeServiceability;
 exports.createManifest = createManifest;
@@ -384,6 +385,212 @@ async function createAwbAndLabel(pool, req, res) {
     }
     catch (err) {
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to create AWB/label', err);
+    }
+}
+// Helper function to auto-create Shiprocket shipment for an order
+async function autoCreateShiprocketShipment(pool, order) {
+    try {
+        // Check if shipping address is complete
+        const shippingAddress = typeof order.shipping_address === 'string'
+            ? JSON.parse(order.shipping_address)
+            : order.shipping_address || {};
+        if (!shippingAddress.address || !shippingAddress.city || !shippingAddress.zip) {
+            console.log(`ℹ️ Skipping Shiprocket auto-creation for order ${order.order_number} - incomplete shipping address`);
+            return { success: false, error: { message: 'Incomplete shipping address' } };
+        }
+        // Check if shipment already exists
+        const existingCheck = await pool.query('SELECT id, shipment_id FROM shiprocket_shipments WHERE order_id = $1', [order.id]);
+        if (existingCheck.rows.length > 0 && existingCheck.rows[0].shipment_id) {
+            console.log(`ℹ️ Shiprocket shipment already exists for order ${order.order_number}`);
+            return {
+                success: true,
+                shipmentId: existingCheck.rows[0].shipment_id,
+                awbCode: undefined
+            };
+        }
+        console.log(`🚀 Attempting to auto-create Shiprocket shipment for order ${order.order_number}`);
+        const shiprocketToken = await getToken(pool);
+        if (!shiprocketToken) {
+            console.log('⚠️ Shiprocket credentials not configured, skipping auto-shipment creation');
+            return { success: false, error: { message: 'Shiprocket credentials not configured' } };
+        }
+        const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
+        // Get available pickup locations
+        const pickupLocations = await getPickupLocations(pool);
+        let pickupLocation = 'work';
+        if (pickupLocations && pickupLocations.length > 0) {
+            pickupLocation = pickupLocations[0].pickup_location || pickupLocations[0].id?.toString() || 'work';
+            console.log(`✅ Using pickup location: ${pickupLocation} (from ${pickupLocations.length} available locations)`);
+        }
+        else {
+            console.log('⚠️ No pickup locations found via API, using default: work');
+        }
+        // Helper function to extract 10-digit phone number
+        const getTenDigitPhone = (phoneValue) => {
+            if (!phoneValue)
+                return '';
+            const cleanPhone = phoneValue.replace(/\D/g, '');
+            if (cleanPhone.length > 10)
+                return cleanPhone.slice(-10);
+            if (cleanPhone.length === 10)
+                return cleanPhone;
+            return cleanPhone;
+        };
+        const billingAddress = typeof order.billing_address === 'string'
+            ? JSON.parse(order.billing_address)
+            : order.billing_address || {};
+        const items = Array.isArray(order.items) ? order.items : JSON.parse(order.items || '[]');
+        const cod = order.cod === true || order.payment_method === 'cod' || order.payment_type === 'cod';
+        // Prepare shipment payload
+        const shipmentPayload = {
+            order_id: order.order_number || `ORDER-${order.id}`,
+            order_date: new Date(order.created_at || Date.now()).toISOString().split('T')[0],
+            pickup_location: pickupLocation,
+            billing_customer_name: order.customer_name,
+            billing_last_name: shippingAddress.lastName || '',
+            billing_address: shippingAddress.address || '',
+            billing_address_2: shippingAddress.apartment || '',
+            billing_city: shippingAddress.city || '',
+            billing_pincode: shippingAddress.zip || shippingAddress.pincode || '',
+            billing_state: shippingAddress.state || '',
+            billing_country: shippingAddress.country || 'India',
+            billing_email: order.customer_email,
+            billing_phone: getTenDigitPhone(shippingAddress.phone || billingAddress.phone),
+            shipping_is_billing: !billingAddress || Object.keys(billingAddress).length === 0,
+            shipping_customer_name: order.customer_name,
+            shipping_last_name: shippingAddress.lastName || '',
+            shipping_address: shippingAddress.address || '',
+            shipping_address_2: shippingAddress.apartment || '',
+            shipping_city: shippingAddress.city || '',
+            shipping_pincode: shippingAddress.zip || shippingAddress.pincode || '',
+            shipping_state: shippingAddress.state || '',
+            shipping_country: shippingAddress.country || 'India',
+            shipping_email: order.customer_email,
+            shipping_phone: getTenDigitPhone(shippingAddress.phone),
+            order_items: items.map((item, index) => ({
+                name: item.name || item.title || `Product ${index + 1}`,
+                sku: item.sku || item.variant_id || `SKU-${item.product_id || index}`,
+                units: item.quantity || 1,
+                selling_price: item.price || item.unit_price || 0
+            })),
+            payment_method: cod ? 'COD' : 'Prepaid',
+            sub_total: order.subtotal || 0,
+            length: 10,
+            breadth: 10,
+            height: 10,
+            weight: 0.5,
+            total_discount: order.discount_amount || 0,
+            shipping_charges: order.shipping || 0,
+            giftwrap_charges: 0,
+            transaction_charges: 0,
+            total_discounts: order.discount_amount || 0,
+            cod_charges: cod ? (order.total * 0.02) : 0,
+            add_charges: 0,
+            comment: `Order from NEFOL - ${order.order_number || order.id}`
+        };
+        const shipmentResp = await fetch(`${baseUrl}/orders/create/adhoc`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${shiprocketToken}`
+            },
+            body: JSON.stringify(shipmentPayload)
+        });
+        const shipmentData = await shipmentResp.json();
+        if (shipmentResp.ok && shipmentData) {
+            const shipmentId = shipmentData?.shipment_id || shipmentData?.order_id || null;
+            const awbCode = shipmentData?.awb_code || null;
+            // Save or update in database
+            if (existingCheck.rows.length === 0) {
+                await pool.query(`INSERT INTO shiprocket_shipments (order_id, shipment_id, tracking_url, status, awb_code, label_url, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`, [
+                    order.id,
+                    shipmentId ? String(shipmentId) : null,
+                    shipmentData?.tracking_url || null,
+                    shipmentData?.status || 'pending',
+                    awbCode,
+                    shipmentData?.label_url || null
+                ]);
+            }
+            else {
+                await pool.query(`UPDATE shiprocket_shipments 
+           SET shipment_id = $1, tracking_url = $2, status = $3, awb_code = $4, label_url = $5, updated_at = NOW()
+           WHERE order_id = $6`, [
+                    shipmentId ? String(shipmentId) : null,
+                    shipmentData?.tracking_url || null,
+                    shipmentData?.status || 'pending',
+                    awbCode,
+                    shipmentData?.label_url || null,
+                    order.id
+                ]);
+            }
+            console.log(`✅ Shiprocket shipment created automatically for order ${order.order_number}, shipment_id: ${shipmentId}`);
+            return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: awbCode || undefined };
+        }
+        else {
+            // Handle pickup location errors with retry
+            if (shipmentData?.message?.includes('Pickup location') || shipmentData?.message?.includes('pickup')) {
+                let correctLocation = 'work';
+                if (shipmentData?.data?.data?.length > 0) {
+                    correctLocation = shipmentData.data.data[0].pickup_location || shipmentData.data.data[0].id?.toString() || 'work';
+                }
+                else if (shipmentData?.data?.length > 0) {
+                    correctLocation = shipmentData.data[0].pickup_location || shipmentData.data[0].id?.toString() || 'work';
+                }
+                console.log(`⚠️ Pickup location error detected, retrying with: ${correctLocation}`);
+                shipmentPayload.pickup_location = correctLocation;
+                const retryResp = await fetch(`${baseUrl}/orders/create/adhoc`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${shiprocketToken}`
+                    },
+                    body: JSON.stringify(shipmentPayload)
+                });
+                const retryData = await retryResp.json();
+                if (retryResp.ok && retryData) {
+                    const shipmentId = retryData?.shipment_id || retryData?.order_id || null;
+                    const awbCode = retryData?.awb_code || null;
+                    if (existingCheck.rows.length === 0) {
+                        await pool.query(`INSERT INTO shiprocket_shipments (order_id, shipment_id, tracking_url, status, awb_code, label_url, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`, [
+                            order.id,
+                            shipmentId ? String(shipmentId) : null,
+                            retryData?.tracking_url || null,
+                            retryData?.status || 'pending',
+                            awbCode,
+                            retryData?.label_url || null
+                        ]);
+                    }
+                    else {
+                        await pool.query(`UPDATE shiprocket_shipments 
+               SET shipment_id = $1, tracking_url = $2, status = $3, awb_code = $4, label_url = $5, updated_at = NOW()
+               WHERE order_id = $6`, [
+                            shipmentId ? String(shipmentId) : null,
+                            retryData?.tracking_url || null,
+                            retryData?.status || 'pending',
+                            awbCode,
+                            retryData?.label_url || null,
+                            order.id
+                        ]);
+                    }
+                    console.log(`✅ Shiprocket shipment created automatically (after retry) for order ${order.order_number}, shipment_id: ${shipmentId}`);
+                    return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: awbCode || undefined };
+                }
+                else {
+                    console.error('⚠️ Failed to auto-create Shiprocket shipment (after retry):', retryData);
+                    return { success: false, error: retryData };
+                }
+            }
+            else {
+                console.error('⚠️ Failed to auto-create Shiprocket shipment:', shipmentData);
+                return { success: false, error: shipmentData };
+            }
+        }
+    }
+    catch (err) {
+        console.error('❌ Error auto-creating Shiprocket shipment:', err);
+        return { success: false, error: err };
     }
 }
 async function trackShipment(pool, req, res) {

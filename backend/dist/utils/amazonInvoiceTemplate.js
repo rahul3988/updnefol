@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateAmazonInvoiceHTML = generateAmazonInvoiceHTML;
 // Amazon-style invoice template generator
 const invoiceUtils_1 = require("./invoiceUtils");
-function generateAmazonInvoiceHTML(order, companyDetails, taxSettings, terms, signature, currency, logoUrl = null, signatoryPhotoUrl = null) {
+function generateAmazonInvoiceHTML(order, companyDetails, taxSettings, terms, signature, currency, logoUrl = null, signatoryPhotoUrl = null, shipmentInfo = null) {
     try {
         const items = Array.isArray(order.items) ? order.items : JSON.parse(order.items || '[]');
         // Calculate totals
@@ -335,6 +335,18 @@ function generateAmazonInvoiceHTML(order, companyDetails, taxSettings, terms, si
         <div class="summary-label">Amount in Words:</div>
         <div class="summary-value">${amountInWords}</div>
       </div>
+      ${shipmentInfo?.awb_code ? `
+      <div class="summary-row" style="border-top: 1px solid #ddd; margin-top: 8px; padding-top: 8px;">
+        <div class="summary-label">AWB Code:</div>
+        <div class="summary-value"><strong>${shipmentInfo.awb_code}</strong></div>
+      </div>
+      ` : ''}
+      ${shipmentInfo?.tracking_url ? `
+      <div class="summary-row">
+        <div class="summary-label">Tracking:</div>
+        <div class="summary-value"><a href="${shipmentInfo.tracking_url}" target="_blank" style="color: #0066cc; text-decoration: none;">Track Shipment →</a></div>
+      </div>
+      ` : ''}
     </div>
     
     <!-- Footer -->

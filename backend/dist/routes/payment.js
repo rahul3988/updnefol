@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -257,9 +290,24 @@ const verifyRazorpayPayment = (pool) => async (req, res) => {
             return (0, apiHelpers_1.sendError)(res, 500, 'Order verification completed but order not found');
         }
         console.log('✅ Payment verified successfully for order:', order_number);
+        const updatedOrder = result.rows[0];
+        // Auto-create Shiprocket shipment after payment verification (async, don't block response)
+        if (updatedOrder.payment_status === 'paid') {
+            try {
+                const { autoCreateShiprocketShipment } = await Promise.resolve().then(() => __importStar(require('./shiprocket')));
+                autoCreateShiprocketShipment(pool, updatedOrder).catch((shiprocketErr) => {
+                    console.error('❌ Error auto-creating Shiprocket shipment after payment verification:', shiprocketErr);
+                    // Don't fail payment verification if Shiprocket fails
+                });
+            }
+            catch (importErr) {
+                console.error('❌ Error importing Shiprocket module:', importErr);
+                // Don't fail payment verification if import fails
+            }
+        }
         (0, apiHelpers_1.sendSuccess)(res, {
             verified: true,
-            order: result.rows[0]
+            order: updatedOrder
         });
     }
     catch (err) {
