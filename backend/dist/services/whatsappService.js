@@ -586,6 +586,60 @@ class WhatsAppService {
         }
     }
     /**
+     * Send affiliate verification code via WhatsApp
+     * First tries to use nefol_affiliate_approved template (AUTHENTICATION category), falls back to plain text if template not available
+     *
+     * Template: nefol_affiliate_approved (AUTHENTICATION category - when approved in Meta Business Manager)
+     * Variables: [name, verificationCode] - Requires 2 parameters: {{1}} = Name, {{2}} = Verification Code
+     * Category: AUTHENTICATION (required for verification codes)
+     *
+     * @param {string} phone - Recipient phone number
+     * @param {string} name - Affiliate partner name
+     * @param {string} verificationCode - 20-digit affiliate verification code
+     * @returns {Promise<{ok: boolean, providerId?: string, fallbackUsed?: boolean, error?: any}>}
+     */
+    async sendAffiliateCodeWhatsApp(phone, name, verificationCode) {
+        try {
+            if (!phone) {
+                return { ok: false, error: { message: 'Phone number not provided' } };
+            }
+            // Try to use template first (if approved in Meta Business Manager)
+            // Note: This template should be in AUTHENTICATION category
+            try {
+                const variables = [
+                    { type: 'text', text: name },
+                    { type: 'text', text: verificationCode }
+                ];
+                const templateResult = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(phone, 'nefol_affiliate_approved', variables, 'en');
+                if (templateResult.ok) {
+                    console.log(`✅ Affiliate code WhatsApp sent via template (AUTHENTICATION) to: ${phone}`);
+                    return { ok: true, providerId: templateResult.providerId };
+                }
+                // If template fails (not approved yet), fall back to plain text
+                console.warn('⚠️ Template nefol_affiliate_approved not available, using plain text fallback');
+            }
+            catch (templateError) {
+                console.warn('⚠️ Template error, using plain text fallback:', templateError.message);
+            }
+            // Fallback to plain text message (only if template not approved)
+            const message = `🎉 Congratulations ${name}!\n\nYour affiliate application has been approved!\n\nYour Affiliate Verification Code:\n*${verificationCode}*\n\nPlease use this code to verify your affiliate account and start earning commissions.\n\nWelcome to the Nefol Affiliate Program! 💙\n\nFor any queries, contact us at support@thenefol.com`;
+            const result = await this.sendText(phone, message);
+            if (result.success) {
+                console.log(`✅ Affiliate code WhatsApp sent (plain text) to: ${phone}`);
+                return {
+                    ok: true,
+                    providerId: result.data?.messages?.[0]?.id,
+                    fallbackUsed: true
+                };
+            }
+            return { ok: false, error: { message: result.error || 'Failed to send WhatsApp' } };
+        }
+        catch (error) {
+            console.error('❌ Error in sendAffiliateCodeWhatsApp:', error);
+            return { ok: false, error: { message: error.message } };
+        }
+    }
+    /**
      * Send greeting message via WhatsApp using nefol_greet_1 template
      * Template: nefol_greet_1
      * Variables: [name]

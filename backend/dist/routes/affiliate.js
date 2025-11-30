@@ -21,6 +21,7 @@ exports.getAffiliateCommissionForUsers = getAffiliateCommissionForUsers;
 exports.getAffiliateMarketingMaterials = getAffiliateMarketingMaterials;
 const apiHelpers_1 = require("../utils/apiHelpers");
 const crypto_1 = __importDefault(require("crypto"));
+const emailService_1 = require("../services/emailService");
 // Generate 20-digit verification code
 function generateVerificationCode() {
     return crypto_1.default.randomBytes(10).toString('hex').slice(0, 20);
@@ -79,6 +80,13 @@ async function submitAffiliateApplication(pool, req, res) {
             houseNumber, street, building || null, apartment || null, road, city, pincode, state,
             agreeTerms, 'pending', new Date()
         ]);
+        // Send confirmation email to applicant
+        if (email) {
+            (0, emailService_1.sendAffiliateApplicationSubmittedEmail)(email, name).catch((err) => {
+                console.error('❌ Error sending affiliate application confirmation email:', err);
+                // Don't fail the application if email fails
+            });
+        }
         (0, apiHelpers_1.sendSuccess)(res, rows[0], 201);
     }
     catch (err) {
@@ -168,6 +176,17 @@ async function approveAffiliateApplication(pool, req, res) {
             id, application.name, application.email, application.phone, verificationCode,
             'unverified', 10.0, 0, 0, 0, new Date()
         ]);
+        // Send Email notification with verification code (if email is available)
+        // Note: WhatsApp template not approved yet, using email only
+        if (application.email) {
+            (0, emailService_1.sendAffiliateCodeEmail)(application.email, application.name, verificationCode).catch((err) => {
+                console.error('❌ Error sending affiliate code via Email:', err);
+                // Don't fail the approval if email fails
+            });
+        }
+        else {
+            console.warn('⚠️ No email address found for affiliate application, cannot send verification code');
+        }
         (0, apiHelpers_1.sendSuccess)(res, {
             application: rows[0],
             verificationCode,

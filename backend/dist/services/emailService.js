@@ -15,6 +15,8 @@ exports.sendOrderShippedEmail = sendOrderShippedEmail;
 exports.sendOrderDeliveredEmail = sendOrderDeliveredEmail;
 exports.sendSubscriptionActivatedEmail = sendSubscriptionActivatedEmail;
 exports.sendSubscriptionReminderOrCancelledEmail = sendSubscriptionReminderOrCancelledEmail;
+exports.sendAffiliateCodeEmail = sendAffiliateCodeEmail;
+exports.sendAffiliateApplicationSubmittedEmail = sendAffiliateApplicationSubmittedEmail;
 // Email Service - All 6 Email Automation Events
 const email_1 = require("../utils/email");
 // 1. Welcome Email - User Signup
@@ -800,5 +802,118 @@ async function sendSubscriptionReminderOrCancelledEmail(userEmail, plan, type) {
     }
     catch (error) {
         console.error('❌ Error sending subscription reminder/cancelled email:', error);
+    }
+}
+// 15. Affiliate Code Email - Send affiliate verification code
+async function sendAffiliateCodeEmail(userEmail, userName, verificationCode) {
+    try {
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Affiliate Verification Code</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">🎉 Congratulations!</h1>
+          <p style="color: #fff; margin: 10px 0 0 0; font-size: 18px;">Your Affiliate Application Has Been Approved</p>
+        </div>
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">We're thrilled to inform you that your affiliate application has been approved! Welcome to the Nefol Affiliate Program.</p>
+          <div style="background: #fff; padding: 25px; border-radius: 8px; margin: 25px 0; border: 2px solid #667eea; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 1px;">Your Affiliate Verification Code</p>
+            <p style="margin: 0; font-size: 28px; font-weight: bold; color: #667eea; letter-spacing: 2px; font-family: 'Courier New', monospace;">${verificationCode}</p>
+          </div>
+          <p style="font-size: 16px; margin-bottom: 20px;"><strong>What's Next?</strong></p>
+          <ul style="font-size: 16px; margin-bottom: 20px; padding-left: 20px;">
+            <li>Use this verification code to verify your affiliate account</li>
+            <li>Start sharing your unique affiliate link</li>
+            <li>Earn commissions on every successful referral</li>
+            <li>Track your earnings and referrals in your affiliate dashboard</li>
+          </ul>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="https://thenefol.com/#/user/affiliate" style="background: #667eea; color: #fff; padding: 14px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">Access Your Affiliate Dashboard</a>
+          </div>
+          <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin-top: 30px; border-left: 4px solid #667eea;">
+            <p style="margin: 0; font-size: 14px; color: #555;"><strong>Important:</strong> Keep this verification code secure. You'll need it to verify your affiliate account and access your dashboard.</p>
+          </div>
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">If you have any questions, feel free to reach out to us at <a href="mailto:support@thenefol.com" style="color: #667eea;">support@thenefol.com</a></p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Welcome aboard! We're excited to have you as part of the Nefol family.</p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Best regards,<br><strong>The Nefol Team</strong></p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol Affiliate Program" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: '🎉 Your Affiliate Application Has Been Approved - Verification Code',
+            html
+        });
+        console.log(`✅ Affiliate code email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending affiliate code email:', error);
+        // Don't throw - email failures shouldn't break the approval process
+    }
+}
+// 16. Affiliate Application Submitted Email - Send confirmation when user applies
+async function sendAffiliateApplicationSubmittedEmail(userEmail, userName) {
+    try {
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Affiliate Application Received</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Application Received!</h1>
+          <p style="color: #fff; margin: 10px 0 0 0; font-size: 18px;">Thank You for Your Interest</p>
+        </div>
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">Thank you for applying to join the Nefol Affiliate Program! We've received your application and our team is reviewing it.</p>
+          <div style="background: #fff; padding: 25px; border-radius: 8px; margin: 25px 0; border: 2px solid #667eea;">
+            <p style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold; color: #667eea;">What Happens Next?</p>
+            <ul style="font-size: 16px; margin: 0; padding-left: 20px; color: #555;">
+              <li style="margin-bottom: 10px;">Our team will review your application (usually within 24-48 hours)</li>
+              <li style="margin-bottom: 10px;">You'll receive an email notification once your application is reviewed</li>
+              <li style="margin-bottom: 10px;">If approved, you'll receive your affiliate verification code via email</li>
+              <li style="margin-bottom: 10px;">You can then start sharing your unique affiliate link and earning commissions</li>
+            </ul>
+          </div>
+          <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin-top: 30px; border-left: 4px solid #667eea;">
+            <p style="margin: 0; font-size: 14px; color: #555;"><strong>Note:</strong> Please check your email regularly for updates on your application status. Make sure to check your spam folder as well.</p>
+          </div>
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">If you have any questions about your application, feel free to reach out to us at <a href="mailto:support@thenefol.com" style="color: #667eea;">support@thenefol.com</a></p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">We appreciate your interest in partnering with Nefol!</p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Best regards,<br><strong>The Nefol Team</strong></p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"Thenefol Affiliate Program" <${(0, email_1.getAdminEmail)()}>`,
+            to: userEmail,
+            subject: '✅ Your Affiliate Application Has Been Received',
+            html
+        });
+        console.log(`✅ Affiliate application confirmation email sent to: ${userEmail}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending affiliate application confirmation email:', error);
+        // Don't throw - email failures shouldn't break the application submission
     }
 }
