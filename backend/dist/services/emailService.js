@@ -111,13 +111,31 @@ async function sendCartAddedEmail(userEmail, userName, productName, productPrice
 // 3. Order Confirmation - Order Placed
 async function sendOrderConfirmationEmail(order, sendToAdmin = false) {
     try {
-        const itemsHtml = order.items?.map((item) => `
+        // Helper function to safely convert values to numbers
+        const toNumber = (value) => {
+            if (value === null || value === undefined || value === '')
+                return 0;
+            const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+            return isNaN(num) ? 0 : num;
+        };
+        const itemsHtml = order.items?.map((item) => {
+            const itemPrice = toNumber(item.price);
+            const itemQuantity = toNumber(item.quantity) || 1;
+            const itemTotal = itemPrice * itemQuantity;
+            return `
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.title || item.name || 'Product'}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity || 1}</td>
-        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${itemQuantity}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">₹${itemTotal.toFixed(2)}</td>
       </tr>
-    `).join('') || '';
+    `;
+        }).join('') || '';
+        // Convert all order values to numbers safely
+        const subtotal = toNumber(order.subtotal);
+        const shipping = toNumber(order.shipping);
+        const tax = toNumber(order.tax);
+        const total = toNumber(order.total);
+        const discountAmount = toNumber(order.discount_amount);
         const html = `
       <!DOCTYPE html>
       <html>
@@ -164,25 +182,25 @@ async function sendOrderConfirmationEmail(order, sendToAdmin = false) {
             <table style="width: 100%;">
               <tr>
                 <td style="padding: 5px 0;"><strong>Subtotal:</strong></td>
-                <td style="text-align: right; padding: 5px 0;">₹${(order.subtotal || 0).toFixed(2)}</td>
+                <td style="text-align: right; padding: 5px 0;">₹${subtotal.toFixed(2)}</td>
               </tr>
               <tr>
                 <td style="padding: 5px 0;"><strong>Shipping:</strong></td>
-                <td style="text-align: right; padding: 5px 0;">₹${(order.shipping || 0).toFixed(2)}</td>
+                <td style="text-align: right; padding: 5px 0;">₹${shipping.toFixed(2)}</td>
               </tr>
               <tr>
                 <td style="padding: 5px 0;"><strong>Tax:</strong></td>
-                <td style="text-align: right; padding: 5px 0;">₹${(order.tax || 0).toFixed(2)}</td>
+                <td style="text-align: right; padding: 5px 0;">₹${tax.toFixed(2)}</td>
               </tr>
-              ${order.discount_amount > 0 ? `
+              ${discountAmount > 0 ? `
               <tr>
                 <td style="padding: 5px 0;"><strong>Discount:</strong></td>
-                <td style="text-align: right; padding: 5px 0; color: #28a745;">-₹${(order.discount_amount || 0).toFixed(2)}</td>
+                <td style="text-align: right; padding: 5px 0; color: #28a745;">-₹${discountAmount.toFixed(2)}</td>
               </tr>
               ` : ''}
               <tr style="border-top: 2px solid #667eea;">
                 <td style="padding: 10px 0;"><strong>Total:</strong></td>
-                <td style="text-align: right; padding: 10px 0; font-size: 18px; font-weight: bold; color: #667eea;">₹${(order.total || 0).toFixed(2)}</td>
+                <td style="text-align: right; padding: 10px 0; font-size: 18px; font-weight: bold; color: #667eea;">₹${total.toFixed(2)}</td>
               </tr>
             </table>
           </div>
