@@ -2443,7 +2443,7 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
         discount_amount = 0, // Discount amount applied
         coins_used = 0 // Coins used for payment
          } = req.body || {};
-        if (!order_number || !customer_name || !customer_email || !shipping_address || !items || !total) {
+        if (!customer_name || !customer_email || !shipping_address || !items || !total) {
             return (0, apiHelpers_1.sendError)(res, 400, 'Missing required fields');
         }
         // Ensure columns exist
@@ -2454,12 +2454,21 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) DEFAULT 0`);
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing_address JSONB`);
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS coins_used INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number TEXT`);
+        // Import order number generation utilities
+        const { generateOrderNumber, generateNewInvoiceNumber } = await Promise.resolve().then(() => __importStar(require('./utils/invoiceUtils')));
+        // Auto-generate order number in new format (NS-093011251001 or NC-093011251001)
+        // If order_number is provided, use it; otherwise generate new format
+        const generatedOrderNumber = order_number || await generateOrderNumber(pool, items);
+        // Generate invoice number in new format (N09LKO3011251001)
+        const invoiceNumber = await generateNewInvoiceNumber(pool, shipping_address);
         const { rows } = await pool.query(`
-      INSERT INTO orders (order_number, customer_name, customer_email, shipping_address, billing_address, items, subtotal, shipping, tax, total, payment_method, payment_type, payment_status, cod, affiliate_id, discount_code, discount_amount, coins_used)
-      VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      INSERT INTO orders (order_number, invoice_number, customer_name, customer_email, shipping_address, billing_address, items, subtotal, shipping, tax, total, payment_method, payment_type, payment_status, cod, affiliate_id, discount_code, discount_amount, coins_used)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *
     `, [
-            order_number,
+            generatedOrderNumber,
+            invoiceNumber,
             customer_name,
             customer_email,
             JSON.stringify(shipping_address),

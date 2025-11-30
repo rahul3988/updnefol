@@ -215,8 +215,13 @@ async function createShipment(pool, req, res) {
             giftwrap_charges: 0,
             transaction_charges: 0,
             total_discounts: order.discount_amount || 0,
-            cod_charges: (order.payment_method === 'cod' || order.payment_type === 'cod') ? (order.total * 0.02) : 0, // 2% COD charges
+            // Don't add cod_charges separately - order.total already includes all charges
+            // Setting cod_charges to 0 prevents Shiprocket from adding extra charges
+            cod_charges: 0,
             add_charges: 0,
+            // Send exact order amount to Shiprocket to ensure correct COD collection
+            // This is the final amount customer should pay (matches order.total exactly)
+            order_amount: order.total || 0,
             comment: `Order from NEFOL - ${order.order_number || order.id}`
         };
         const base = getBaseUrl();
@@ -484,8 +489,13 @@ async function autoCreateShiprocketShipment(pool, order) {
             giftwrap_charges: 0,
             transaction_charges: 0,
             total_discounts: order.discount_amount || 0,
-            cod_charges: cod ? (order.total * 0.02) : 0,
+            // Don't add cod_charges separately - order.total already includes all charges
+            // Setting cod_charges to 0 prevents Shiprocket from adding extra charges
+            cod_charges: 0,
             add_charges: 0,
+            // Send exact order amount to Shiprocket to ensure correct COD collection
+            // This is the final amount customer should pay (₹443)
+            order_amount: order.total || 0,
             comment: `Order from NEFOL - ${order.order_number || order.id}`
         };
         const shipmentResp = await fetch(`${baseUrl}/orders/create/adhoc`, {
