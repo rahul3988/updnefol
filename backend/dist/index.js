@@ -2745,9 +2745,9 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
                 });
             }
         }
-        // Automatically create Shiprocket shipment if payment is successful or COD
-        // Only create if shipping address is complete
-        if ((payment_status === 'paid' || cod === true) && shipping_address?.address && shipping_address?.city && shipping_address?.pincode) {
+        // Automatically create Shiprocket shipment if shipping address is complete
+        // Creates shipment regardless of payment status (for both paid and unpaid orders)
+        if (shipping_address?.address && shipping_address?.city && shipping_address?.pincode) {
             try {
                 const { autoCreateShiprocketShipment } = await Promise.resolve().then(() => __importStar(require('./routes/shiprocket')));
                 autoCreateShiprocketShipment(pool, order).catch((shiprocketErr) => {
@@ -2761,7 +2761,7 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
             }
         }
         else {
-            console.log(`ℹ️ Skipping auto-shipment creation for order ${order_number} (payment_status: ${payment_status}, cod: ${cod}, address complete: ${!!(shipping_address?.address && shipping_address?.city && shipping_address?.pincode)})`);
+            console.log(`ℹ️ Skipping auto-shipment creation for order ${order_number} - incomplete shipping address (address: ${!!shipping_address?.address}, city: ${!!shipping_address?.city}, pincode: ${!!shipping_address?.pincode})`);
         }
         // Send order confirmation email (async, don't wait)
         // Send to customer
