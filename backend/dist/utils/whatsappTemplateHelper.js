@@ -141,7 +141,7 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             });
         }
         else if (templateName === 'nefol_login_otp' && bodyParameters.length > 0) {
-            // Special handling for nefol_login_otp (Authentication template with copy-code button)
+            // Special handling for nefol_login_otp (Authentication template with URL button)
             // Extract OTP from first parameter
             const otp = bodyParameters[0]?.text || '';
             // First component: body with OTP text
@@ -154,15 +154,25 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                     }
                 ]
             });
-            // Second component: button with type "button" and copy code functionality
+            // Second component: button with type "url" (template expects URL button)
+            const rawButtonValue = process.env.WHATSAPP_BUTTON_URL || 'thenefol.com';
+            let buttonParam = rawButtonValue
+                .replace(/^https?:\/\//i, '')
+                .replace(/^www\./i, '')
+                .split('/')[0]
+                .replace(/[^a-zA-Z0-9.-]/g, '')
+                .slice(0, 15);
+            if (!buttonParam) {
+                buttonParam = 'thenefol.com';
+            }
             components.push({
                 type: 'button',
-                sub_type: 'copy_code',
+                sub_type: 'url',
                 index: 0,
                 parameters: [
                     {
                         type: 'text',
-                        text: otp
+                        text: buttonParam
                     }
                 ]
             });
