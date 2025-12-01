@@ -2457,7 +2457,7 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_number TEXT`);
         // Import order number generation utilities
         const { generateOrderNumber, generateNewInvoiceNumber } = await Promise.resolve().then(() => __importStar(require('./utils/invoiceUtils')));
-        // Auto-generate order number in new format (NS-093011251001 or NC-093011251001)
+        // Auto-generate order number in new format (N-093011251001)
         // If order_number is provided, use it; otherwise generate new format
         const generatedOrderNumber = order_number || await generateOrderNumber(pool, items);
         // Generate invoice number in new format (N09LKO3011251001)
