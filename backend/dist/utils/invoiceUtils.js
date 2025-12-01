@@ -161,11 +161,11 @@ function isComboOrder(items) {
     });
 }
 // Generate new format order number
-// Format: NS-093011251001 (Single) or NC-093011251001 (Combo)
-// NS/NC + GST Code (09) + Date (DDMMYY) + Invoice Number (4 digits)
+// Format: N-093011251001
+// N + GST Code (09) + Date (DDMMYY) + Invoice Number (4 digits)
 async function generateOrderNumber(pool, items) {
-    const isCombo = isComboOrder(items);
-    const prefix = isCombo ? 'NC' : 'NS';
+    // Use single prefix "N" for all orders (single or combo)
+    const prefix = 'N';
     const gstCode = '09';
     // Get current date in DDMMYY format
     const now = new Date();
@@ -175,7 +175,7 @@ async function generateOrderNumber(pool, items) {
     const dateStr = `${day}${month}${year}`;
     // Get next invoice number (starting from 1001)
     const invoiceNum = await getNextInvoiceSequenceNumber(pool);
-    // Format: NS-093011251001
+    // Format: N-093011251001
     return `${prefix}-${gstCode}${dateStr}${invoiceNum}`;
 }
 // Generate new format invoice number

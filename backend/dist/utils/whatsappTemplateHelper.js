@@ -144,6 +144,7 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             // Special handling for nefol_login_otp (Authentication template with copy-code button)
             // Extract OTP from first parameter
             const otp = bodyParameters[0]?.text || '';
+            // First component: body with OTP text
             components.push({
                 type: 'body',
                 parameters: [
@@ -153,9 +154,10 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
                     }
                 ]
             });
+            // Second component: button with type "button" and copy code functionality
             components.push({
                 type: 'button',
-                sub_type: 'url',
+                sub_type: 'copy_code',
                 index: 0,
                 parameters: [
                     {
@@ -180,7 +182,7 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
             });
             components.push({
                 type: 'button',
-                sub_type: 'url',
+                sub_type: 'copy_code',
                 index: 0,
                 parameters: [
                     {
