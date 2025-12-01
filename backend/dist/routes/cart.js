@@ -740,115 +740,29 @@ async function sendOTPLogin(pool, req, res) {
         const templateLanguage = process.env.WHATSAPP_OTP_TEMPLATE_LANGUAGE || 'en';
         const useTemplate = process.env.WHATSAPP_USE_TEMPLATE === 'true';
         const facebookUrl = `https://graph.facebook.com/v22.0/${phoneNumberId}/messages`;
-        let requestBody;
         if (useTemplate) {
-            // Use template message (works without 24-hour session)
-            // Get contact info from env or use default
-            // Note: Template expects phone number format for {{2}} parameter (max 20 chars)
-            const contactInfo = process.env.WHATSAPP_CONTACT_INFO || '918887847213';
-            // Build parameters array based on template requirements
-            const bodyParameters = [
-                {
-                    type: 'text',
-                    text: otp
-                }
+            const variables = [
+                { type: 'text', text: otp }
             ];
-            // If template requires contact info (2nd parameter), add it
-            // Check if we should send 2 parameters (some templates have {{2}} for contact)
-            const sendContactInfo = process.env.WHATSAPP_TEMPLATE_HAS_CONTACT === 'true';
-            if (sendContactInfo) {
-                // Normalize contact info - remove spaces, +, dashes, etc.
-                // Template expects phone number format (digits only, max 20 chars)
-                const normalizedContact = contactInfo.replace(/[\s+\-()]/g, '').substring(0, 20);
-                bodyParameters.push({
-                    type: 'text',
-                    text: normalizedContact
-                });
+            console.log('📤 Sending Login OTP via template helper');
+            console.log('   Template Name:', templateName);
+            console.log('   Template Language:', templateLanguage);
+            const result = await (0, whatsappTemplateHelper_1.sendWhatsAppTemplate)(normalizedPhone, templateName, variables, templateLanguage);
+            if (!result.ok) {
+                console.error('❌ WhatsApp login OTP template send failed:', result.error);
+                return (0, apiHelpers_1.sendError)(res, 500, 'Failed to send OTP. Please try again.', result.error);
             }
-            // Build components array
-            const components = [
-                {
-                    type: 'body',
-                    parameters: bodyParameters
-                }
-            ];
-            // Check if template has buttons that require parameters
-            // URL buttons require a parameter (the URL)
-            // IMPORTANT: WhatsApp button URL parameters have a 15-character limit
-            // IMPORTANT: Button parameters must be plain text (domain only), NOT full URLs
-            const buttonUrl = process.env.WHATSAPP_BUTTON_URL || 'thenefol.com';
-            const hasButton = process.env.WHATSAPP_TEMPLATE_HAS_BUTTON === 'true';
-            if (hasButton) {
-                // WhatsApp button URL parameters must be 15 characters or less
-                // Must be plain text (domain name only), NOT a full URL
-                const maxButtonUrlLength = 15;
-                let buttonUrlParam = buttonUrl;
-                // Remove protocol if present (https://, http://)
-                buttonUrlParam = buttonUrlParam.replace(/^https?:\/\//i, '');
-                // Remove www. prefix if present
-                buttonUrlParam = buttonUrlParam.replace(/^www\./i, '');
-                // Remove trailing slash if present
-                buttonUrlParam = buttonUrlParam.replace(/\/$/, '');
-                // Extract just the domain (remove path if present)
-                try {
-                    // If it looks like a URL, extract hostname
-                    if (buttonUrlParam.includes('/')) {
-                        const urlObj = new URL('https://' + buttonUrlParam);
-                        buttonUrlParam = urlObj.hostname.replace('www.', '');
-                    }
-                }
-                catch {
-                    // If URL parsing fails, try to extract domain manually
-                    const parts = buttonUrlParam.split('/');
-                    buttonUrlParam = parts[0].replace('www.', '');
-                }
-                // Truncate if still too long
-                if (buttonUrlParam.length > maxButtonUrlLength) {
-                    buttonUrlParam = buttonUrlParam.substring(0, maxButtonUrlLength);
-                }
-                // Only add button if we have a valid parameter (15 chars or less, plain text)
-                if (buttonUrlParam.length > 0 && buttonUrlParam.length <= maxButtonUrlLength) {
-                    // Ensure it's plain text (no protocol, no slashes, no special chars)
-                    const cleanParam = buttonUrlParam.replace(/[^a-zA-Z0-9.-]/g, '');
-                    if (cleanParam.length > 0 && cleanParam.length <= maxButtonUrlLength) {
-                        components.push({
-                            type: 'button',
-                            sub_type: 'url',
-                            index: 0,
-                            parameters: [
-                                {
-                                    type: 'text',
-                                    text: cleanParam
-                                }
-                            ]
-                        });
-                        console.log('✅ Button parameter set:', cleanParam);
-                    }
-                    else {
-                        console.warn('⚠️  Button URL parameter invalid after cleaning, skipping. Original:', buttonUrl);
-                    }
-                }
-                else {
-                    console.warn('⚠️  Button URL too long, skipping button parameter. URL:', buttonUrl);
-                }
-            }
-            requestBody = {
-                messaging_product: 'whatsapp',
-                to: normalizedPhone,
-                type: 'template',
-                template: {
-                    name: templateName,
-                    language: {
-                        code: templateLanguage
-                    },
-                    components: components
-                }
-            };
+            console.log('✅ Login OTP sent successfully to:', normalizedPhone);
+            console.log('   Message ID:', result.providerId || 'N/A');
+            return (0, apiHelpers_1.sendSuccess)(res, {
+                message: 'OTP sent successfully to your WhatsApp',
+                expiresIn: 600 // 10 minutes in seconds
+            });
         }
         else {
             // Use text message (requires 24-hour session)
             const message = `Your NEFÖL login verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\nDo not share this code with anyone.`;
-            requestBody = {
+            const requestBody = {
                 messaging_product: 'whatsapp',
                 to: normalizedPhone,
                 type: 'text',
@@ -856,35 +770,29 @@ async function sendOTPLogin(pool, req, res) {
                     body: message
                 }
             };
+            console.log('📤 Sending Login OTP via: Text Message');
+            const whatsappResponse = await fetch(facebookUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+            const whatsappData = await whatsappResponse.json();
+            if (!whatsappResponse.ok) {
+                console.error('❌ WhatsApp API error:', JSON.stringify(whatsappData, null, 2));
+                console.error('   Phone:', normalizedPhone);
+                console.error('   Status:', whatsappResponse.status);
+                return (0, apiHelpers_1.sendError)(res, 500, 'Failed to send OTP. Please try again.');
+            }
+            console.log('✅ Login OTP sent successfully to:', normalizedPhone);
+            console.log('   Message ID:', whatsappData.messages?.[0]?.id || 'N/A');
+            return (0, apiHelpers_1.sendSuccess)(res, {
+                message: 'OTP sent successfully to your WhatsApp',
+                expiresIn: 600 // 10 minutes in seconds
+            });
         }
-        console.log('📤 Sending Login OTP via:', useTemplate ? 'Template' : 'Text Message');
-        if (useTemplate) {
-            console.log('   Template Name:', templateName);
-            console.log('   Template Language:', templateLanguage);
-        }
-        const whatsappResponse = await fetch(facebookUrl, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        const whatsappData = await whatsappResponse.json();
-        if (!whatsappResponse.ok) {
-            console.error('❌ WhatsApp API error:', JSON.stringify(whatsappData, null, 2));
-            console.error('   Phone:', normalizedPhone);
-            console.error('   Status:', whatsappResponse.status);
-            // Still return success to user (don't expose WhatsApp errors)
-            // But log the error for debugging
-            return (0, apiHelpers_1.sendError)(res, 500, 'Failed to send OTP. Please try again.');
-        }
-        console.log('✅ Login OTP sent successfully to:', normalizedPhone);
-        console.log('   Message ID:', whatsappData.messages?.[0]?.id || 'N/A');
-        (0, apiHelpers_1.sendSuccess)(res, {
-            message: 'OTP sent successfully to your WhatsApp',
-            expiresIn: 600 // 10 minutes in seconds
-        });
     }
     catch (err) {
         console.error('❌ Error sending login OTP:', err);
