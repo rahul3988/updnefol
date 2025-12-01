@@ -75,8 +75,29 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         const accessToken = (0, whatsapp_1.getAccessToken)();
         const endpoint = `${baseUrl}/${phoneNumberId}/messages`;
         // Convert variables to template components
-        // Template nefol_verify_code expects 1 parameter: [otp]
-        // Template body: "*{{1}}* is your verification code. For your security, do not share this code."
+        // Templates expect OTP structure with body + URL button
+        const addOtpComponents = (otpValue) => {
+            components.push({
+                type: 'body',
+                parameters: [
+                    {
+                        type: 'text',
+                        text: otpValue
+                    }
+                ]
+            });
+            components.push({
+                type: 'button',
+                sub_type: 'url',
+                index: 0,
+                parameters: [
+                    {
+                        type: 'text',
+                        text: otpValue
+                    }
+                ]
+            });
+        };
         const bodyParameters = variables.map(variable => {
             if (variable.type === 'text') {
                 return { type: 'text', text: variable.text || '' };
@@ -117,90 +138,16 @@ async function sendWhatsAppTemplate(to, templateName, variables = [], languageCo
         const components = [];
         // Special handling for nefol_verify_code (Authentication template with copy-code button)
         if (templateName === 'nefol_verify_code' && bodyParameters.length > 0) {
-            // Extract OTP from first parameter
             const otp = bodyParameters[0]?.text || '';
-            components.push({
-                type: 'body',
-                parameters: [
-                    {
-                        type: 'text',
-                        text: otp
-                    }
-                ]
-            });
-            components.push({
-                type: 'button',
-                sub_type: 'url',
-                index: 0,
-                parameters: [
-                    {
-                        type: 'text',
-                        text: otp
-                    }
-                ]
-            });
+            addOtpComponents(otp);
         }
         else if (templateName === 'nefol_login_otp' && bodyParameters.length > 0) {
-            // Special handling for nefol_login_otp (Authentication template with URL button)
-            // Extract OTP from first parameter
             const otp = bodyParameters[0]?.text || '';
-            // First component: body with OTP text
-            components.push({
-                type: 'body',
-                parameters: [
-                    {
-                        type: 'text',
-                        text: otp
-                    }
-                ]
-            });
-            // Second component: button with type "url" (template expects URL button)
-            const rawButtonValue = process.env.WHATSAPP_BUTTON_URL || 'thenefol.com';
-            let buttonParam = rawButtonValue
-                .replace(/^https?:\/\//i, '')
-                .replace(/^www\./i, '')
-                .split('/')[0]
-                .replace(/[^a-zA-Z0-9.-]/g, '')
-                .slice(0, 15);
-            if (!buttonParam) {
-                buttonParam = 'thenefol.com';
-            }
-            components.push({
-                type: 'button',
-                sub_type: 'url',
-                index: 0,
-                parameters: [
-                    {
-                        type: 'text',
-                        text: buttonParam
-                    }
-                ]
-            });
+            addOtpComponents(otp);
         }
         else if (templateName === 'nefol_reset_password' && bodyParameters.length > 0) {
-            // Special handling for nefol_reset_password (Authentication template with copy-code button)
-            // Extract reset code from first parameter
             const resetCode = bodyParameters[0]?.text || '';
-            components.push({
-                type: 'body',
-                parameters: [
-                    {
-                        type: 'text',
-                        text: resetCode
-                    }
-                ]
-            });
-            components.push({
-                type: 'button',
-                sub_type: 'copy_code',
-                index: 0,
-                parameters: [
-                    {
-                        type: 'text',
-                        text: resetCode
-                    }
-                ]
-            });
+            addOtpComponents(resetCode);
         }
         else {
             // Standard template handling
