@@ -756,6 +756,17 @@ async function ensureSchema(pool) {
       created_at timestamptz default now(),
       updated_at timestamptz default now()
     );
+
+    -- Ensure whatsapp template metadata columns exist
+    alter table whatsapp_templates
+      add column if not exists language text default 'en',
+      add column if not exists status text default 'pending',
+      add column if not exists meta_template_id text,
+      add column if not exists components jsonb;
+
+    create unique index if not exists idx_whatsapp_templates_meta_id
+      on whatsapp_templates(meta_template_id)
+      where meta_template_id is not null;
     
     create table if not exists whatsapp_automations (
       id serial primary key,

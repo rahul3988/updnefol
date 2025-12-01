@@ -1167,6 +1167,8 @@ app.post('/api/whatsapp-chat/send', marketingRoutes.sendWhatsAppMessage.bind(nul
 app.get('/api/whatsapp/config', marketingRoutes.getWhatsAppConfig.bind(null, pool));
 app.post('/api/whatsapp/config', marketingRoutes.saveWhatsAppConfig.bind(null, pool));
 app.post('/api/whatsapp/templates', marketingRoutes.createWhatsAppTemplate.bind(null, pool));
+app.post('/api/whatsapp/templates/sync', marketingRoutes.syncWhatsAppTemplates.bind(null, pool));
+app.delete('/api/whatsapp/templates/:id', marketingRoutes.deleteWhatsAppTemplate.bind(null, pool));
 app.post('/api/whatsapp/automations', marketingRoutes.createWhatsAppAutomation.bind(null, pool));
 app.get('/api/whatsapp/scheduled-messages', marketingRoutes.getScheduledWhatsAppMessages.bind(null, pool));
 app.post('/api/whatsapp/scheduled-messages', marketingRoutes.createScheduledWhatsAppMessage.bind(null, pool));

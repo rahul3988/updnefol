@@ -3,9 +3,70 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiveChatWidgets = exports.getLiveChatAgents = exports.getLiveChatSessions = exports.createScheduledWhatsAppMessage = exports.getScheduledWhatsAppMessages = exports.createWhatsAppAutomation = exports.createWhatsAppTemplate = exports.saveWhatsAppConfig = exports.getWhatsAppConfig = exports.sendWhatsAppMessage = exports.getWhatsAppAutomations = exports.getWhatsAppTemplates = exports.getWhatsAppChats = exports.getPushAutomations = exports.getPushTemplates = exports.getPushNotifications = exports.updateSMSAutomation = exports.createSMSAutomation = exports.getSMSAutomations = exports.getSMSTemplates = exports.deleteSMSCampaign = exports.updateSMSCampaign = exports.createSMSCampaign = exports.getSMSCampaigns = exports.updateEmailAutomation = exports.createEmailAutomation = exports.getEmailAutomations = exports.getEmailSendingLogs = exports.addEmailSubscribers = exports.createEmailList = exports.getEmailLists = exports.sendEmailCampaign = exports.deleteEmailTemplate = exports.updateEmailTemplate = exports.createEmailTemplate = exports.getEmailTemplates = exports.deleteEmailCampaign = exports.updateEmailCampaign = exports.createEmailCampaign = exports.getEmailCampaigns = exports.redeemCashback = exports.getCashbackTransactions = exports.getCashbackOffers = exports.getCashbackWallet = void 0;
+exports.getLiveChatWidgets = exports.getLiveChatAgents = exports.getLiveChatSessions = exports.createScheduledWhatsAppMessage = exports.getScheduledWhatsAppMessages = exports.deleteWhatsAppTemplate = exports.createWhatsAppAutomation = exports.createWhatsAppTemplate = exports.saveWhatsAppConfig = exports.getWhatsAppConfig = exports.sendWhatsAppMessage = exports.getWhatsAppAutomations = exports.syncWhatsAppTemplates = exports.getWhatsAppTemplates = exports.getWhatsAppChats = exports.getPushAutomations = exports.getPushTemplates = exports.getPushNotifications = exports.updateSMSAutomation = exports.createSMSAutomation = exports.getSMSAutomations = exports.getSMSTemplates = exports.deleteSMSCampaign = exports.updateSMSCampaign = exports.createSMSCampaign = exports.getSMSCampaigns = exports.updateEmailAutomation = exports.createEmailAutomation = exports.getEmailAutomations = exports.getEmailSendingLogs = exports.addEmailSubscribers = exports.createEmailList = exports.getEmailLists = exports.sendEmailCampaign = exports.deleteEmailTemplate = exports.updateEmailTemplate = exports.createEmailTemplate = exports.getEmailTemplates = exports.deleteEmailCampaign = exports.updateEmailCampaign = exports.createEmailCampaign = exports.getEmailCampaigns = exports.redeemCashback = exports.getCashbackTransactions = exports.getCashbackOffers = exports.getCashbackWallet = void 0;
 const apiHelpers_1 = require("../utils/apiHelpers");
 const nodemailer_1 = __importDefault(require("nodemailer"));
+const GRAPH_API_VERSION = process.env.META_WA_API_VERSION || 'v17.0';
+const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+const getEnvWhatsAppConfig = () => {
+    const accessToken = process.env.META_WA_TOKEN || process.env.WHATSAPP_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneNumberId = process.env.META_WA_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const businessAccountId = process.env.META_WA_BUSINESS_ACCOUNT_ID || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+    if (accessToken || phoneNumberId || businessAccountId) {
+        return {
+            access_token: accessToken,
+            phone_number_id: phoneNumberId,
+            business_account_id: businessAccountId
+        };
+    }
+    return null;
+};
+const getWhatsAppConfigRecord = async (pool) => {
+    const envConfig = getEnvWhatsAppConfig();
+    if (envConfig?.access_token && (envConfig.phone_number_id || envConfig.business_account_id)) {
+        return envConfig;
+    }
+    const { rows } = await pool.query('SELECT * FROM whatsapp_config ORDER BY updated_at DESC LIMIT 1');
+    return rows[0];
+};
+const extractTemplateVariables = (components) => {
+    if (!Array.isArray(components))
+        return null;
+    const bodyComponent = components.find((c) => c.type === 'BODY');
+    if (!bodyComponent?.text)
+        return null;
+    const matches = bodyComponent.text.match(/{{\d+}}/g);
+    return matches ? matches.map((matchToken) => matchToken.replace(/[{}]/g, '')) : null;
+};
+const upsertWhatsAppTemplate = async (pool, template, rawContent) => {
+    const variables = extractTemplateVariables(template.components || []);
+    await pool.query(`
+    INSERT INTO whatsapp_templates (
+      name, category, content, variables, is_approved, status, language, meta_template_id, components, updated_at
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,NOW())
+    ON CONFLICT (name) DO UPDATE SET
+      category = EXCLUDED.category,
+      content = EXCLUDED.content,
+      variables = EXCLUDED.variables,
+      is_approved = EXCLUDED.is_approved,
+      status = EXCLUDED.status,
+      language = EXCLUDED.language,
+      meta_template_id = COALESCE(EXCLUDED.meta_template_id, whatsapp_templates.meta_template_id),
+      components = EXCLUDED.components,
+      updated_at = NOW()
+  `, [
+        template.name,
+        template.category || 'UTILITY',
+        JSON.stringify(rawContent),
+        variables,
+        template.status?.toUpperCase?.() === 'APPROVED',
+        template.status || 'PENDING',
+        template.language || 'en',
+        template.id || template.template_id || null,
+        JSON.stringify(template.components || []),
+    ]);
+};
 // ==================== CASHBACK SYSTEM ====================
 const getCashbackWallet = async (pool, req, res) => {
     try {
@@ -819,6 +880,36 @@ const getWhatsAppTemplates = async (pool, req, res) => {
     }
 };
 exports.getWhatsAppTemplates = getWhatsAppTemplates;
+const syncWhatsAppTemplates = async (pool, req, res) => {
+    try {
+        const config = await getWhatsAppConfigRecord(pool);
+        if (!config?.access_token || !config?.business_account_id) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'WhatsApp business account ID or access token not configured');
+        }
+        let templates = [];
+        let nextUrl = `${GRAPH_API_BASE}/${config.business_account_id}/message_templates?access_token=${config.access_token}&limit=200`;
+        while (nextUrl) {
+            const response = await fetch(nextUrl);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                return (0, apiHelpers_1.sendError)(res, response.status, data?.error?.message || 'Failed to sync templates', data);
+            }
+            if (Array.isArray(data?.data)) {
+                templates = templates.concat(data.data);
+            }
+            nextUrl = data?.paging?.next || null;
+        }
+        for (const template of templates) {
+            await upsertWhatsAppTemplate(pool, template, template);
+        }
+        const { rows } = await pool.query('SELECT * FROM whatsapp_templates ORDER BY updated_at DESC');
+        (0, apiHelpers_1.sendSuccess)(res, rows);
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to sync WhatsApp templates', err);
+    }
+};
+exports.syncWhatsAppTemplates = syncWhatsAppTemplates;
 const getWhatsAppAutomations = async (pool, req, res) => {
     try {
         const { rows } = await pool.query(`
@@ -996,16 +1087,47 @@ const saveWhatsAppConfig = async (pool, req, res) => {
 exports.saveWhatsAppConfig = saveWhatsAppConfig;
 const createWhatsAppTemplate = async (pool, req, res) => {
     try {
-        const { name, content, category, language, scheduled_date, scheduled_time, is_scheduled } = req.body;
-        if (!name || !content) {
-            return (0, apiHelpers_1.sendError)(res, 400, 'Name and content are required');
+        const { name, category, language, components, allow_category_change, quality_score } = req.body;
+        if (!name || !components || !Array.isArray(components) || components.length === 0) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Name and components are required');
         }
-        const { rows } = await pool.query(`
-      INSERT INTO whatsapp_templates (name, category, content, is_approved, scheduled_date, scheduled_time, is_scheduled, created_at, updated_at)
-      VALUES ($1, $2, $3, false, $4, $5, $6, NOW(), NOW())
-      RETURNING *
-    `, [name, category || 'Custom', content, scheduled_date || null, scheduled_time || null, is_scheduled || false]);
-        (0, apiHelpers_1.sendSuccess)(res, rows[0], 201);
+        const config = await getWhatsAppConfigRecord(pool);
+        if (!config?.access_token || !config?.business_account_id) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'WhatsApp business account ID or access token not configured');
+        }
+        const sanitizedName = name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        const requestBody = {
+            name: sanitizedName,
+            category: (category || 'UTILITY').toUpperCase(),
+            language: (language || 'en').replace('-', '_'),
+            allow_category_change: !!allow_category_change,
+            components
+        };
+        const response = await fetch(`${GRAPH_API_BASE}/${config.business_account_id}/message_templates`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.access_token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return (0, apiHelpers_1.sendError)(res, response.status, data?.error?.message || 'Failed to create template', data);
+        }
+        const templateId = data?.id || data?.message_template_id || null;
+        const metaPayload = (data && typeof data === 'object') ? data : {};
+        await upsertWhatsAppTemplate(pool, {
+            id: templateId,
+            name: sanitizedName,
+            category: requestBody.category,
+            language: requestBody.language,
+            status: 'SUBMITTED',
+            components,
+            quality_score
+        }, { ...metaPayload, request: requestBody });
+        const created = await pool.query('SELECT * FROM whatsapp_templates WHERE name = $1', [sanitizedName]);
+        (0, apiHelpers_1.sendSuccess)(res, created.rows[0], 201);
     }
     catch (err) {
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to create template', err);
@@ -1030,6 +1152,37 @@ const createWhatsAppAutomation = async (pool, req, res) => {
     }
 };
 exports.createWhatsAppAutomation = createWhatsAppAutomation;
+const deleteWhatsAppTemplate = async (pool, req, res) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Template ID is required');
+        }
+        const { rows } = await pool.query('SELECT * FROM whatsapp_templates WHERE id = $1', [id]);
+        if (rows.length === 0) {
+            return (0, apiHelpers_1.sendError)(res, 404, 'Template not found');
+        }
+        const template = rows[0];
+        const config = await getWhatsAppConfigRecord(pool);
+        if (!config?.access_token || !config?.business_account_id) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'WhatsApp business account ID or access token not configured');
+        }
+        if (template.meta_template_id) {
+            const deleteUrl = `${GRAPH_API_BASE}/${template.meta_template_id}?access_token=${config.access_token}`;
+            const response = await fetch(deleteUrl, { method: 'DELETE' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                return (0, apiHelpers_1.sendError)(res, response.status, data?.error?.message || 'Failed to delete template on Meta', data);
+            }
+        }
+        await pool.query('DELETE FROM whatsapp_templates WHERE id = $1', [id]);
+        (0, apiHelpers_1.sendSuccess)(res, { message: 'Template deleted successfully' });
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to delete WhatsApp template', err);
+    }
+};
+exports.deleteWhatsAppTemplate = deleteWhatsAppTemplate;
 // Get scheduled WhatsApp messages
 const getScheduledWhatsAppMessages = async (pool, req, res) => {
     try {
