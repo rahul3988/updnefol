@@ -756,7 +756,7 @@ async function ensureSchema(pool) {
       created_at timestamptz default now(),
       updated_at timestamptz default now()
     );
-
+    
     -- Ensure whatsapp template metadata columns exist
     alter table whatsapp_templates
       add column if not exists language text default 'en',
@@ -767,6 +767,17 @@ async function ensureSchema(pool) {
     create unique index if not exists idx_whatsapp_templates_meta_id
       on whatsapp_templates(meta_template_id)
       where meta_template_id is not null;
+
+    do $$
+    begin
+      if not exists (
+        select 1 from pg_constraint
+        where conname = 'whatsapp_templates_name_key'
+          and conrelid = 'whatsapp_templates'::regclass
+      ) then
+        alter table whatsapp_templates add constraint whatsapp_templates_name_key unique (name);
+      end if;
+    end $$;
     
     create table if not exists whatsapp_automations (
       id serial primary key,
