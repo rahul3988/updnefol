@@ -1381,6 +1381,14 @@ app.get('/api/testimonials', async (req, res) => {
 app.get('/api/product-reviews/product/:productId', async (req, res) => {
     try {
         const { productId } = req.params;
+        // Validate productId parameter
+        if (!productId || productId === 'undefined' || productId === 'null') {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid product ID');
+        }
+        const productIdNum = parseInt(productId, 10);
+        if (isNaN(productIdNum) || productIdNum <= 0) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid product ID');
+        }
         const { rows } = await pool.query(`
       SELECT 
         id,
@@ -1401,7 +1409,7 @@ app.get('/api/product-reviews/product/:productId', async (req, res) => {
       ORDER BY 
         is_featured DESC,
         created_at DESC
-    `, [productId]);
+    `, [productIdNum]);
         (0, apiHelpers_1.sendSuccess)(res, rows);
     }
     catch (err) {

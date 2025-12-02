@@ -54,6 +54,10 @@ async function getProducts(pool, res) {
 async function getProductById(pool, req, res) {
     try {
         const { id } = req.params;
+        // Validate id parameter
+        if (!id || id === 'undefined' || id === 'null') {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid product ID');
+        }
         const { rows } = await pool.query(`
       SELECT p.*, 
              COALESCE(
@@ -92,6 +96,10 @@ async function getProductById(pool, req, res) {
 async function getProductBySlug(pool, req, res) {
     try {
         const { slug } = req.params;
+        // Validate slug parameter
+        if (!slug || slug === 'undefined' || slug === 'null') {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid product slug');
+        }
         const { rows } = await pool.query(`
       SELECT p.*, 
              COALESCE(
