@@ -10,6 +10,7 @@ exports.bulkDeleteProducts = bulkDeleteProducts;
 exports.uploadProductImages = uploadProductImages;
 exports.getProductImages = getProductImages;
 exports.deleteProductImage = deleteProductImage;
+exports.reorderProductImages = reorderProductImages;
 exports.getProductsCSV = getProductsCSV;
 const apiHelpers_1 = require("../utils/apiHelpers");
 // Optimized GET /api/products
@@ -304,7 +305,12 @@ async function uploadProductImages(pool, req, res) {
 async function getProductImages(pool, req, res) {
     try {
         const { id } = req.params;
-        const { rows } = await pool.query('SELECT * FROM product_images WHERE product_id = $1 ORDER BY created_at ASC', [id]);
+        // Check if display_order column exists, if not use created_at
+        const { rows } = await pool.query(`
+      SELECT * FROM product_images 
+      WHERE product_id = $1 
+      ORDER BY COALESCE(display_order, id) ASC, created_at ASC
+    `, [id]);
         (0, apiHelpers_1.sendSuccess)(res, rows);
     }
     catch (err) {
@@ -323,6 +329,41 @@ async function deleteProductImage(pool, req, res) {
     }
     catch (err) {
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to delete product image', err);
+    }
+}
+// Reorder product images
+async function reorderProductImages(pool, req, res) {
+    try {
+        const { id } = req.params;
+        const { images, type } = req.body;
+        if (!images || !Array.isArray(images)) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Images array is required');
+        }
+        // Check if product exists
+        const productCheck = await pool.query('SELECT id FROM products WHERE id = $1', [id]);
+        if (productCheck.rows.length === 0) {
+            return (0, apiHelpers_1.sendError)(res, 404, 'Product not found');
+        }
+        // Update display_order for each image
+        // First, check if display_order column exists
+        try {
+            await pool.query('SELECT display_order FROM product_images LIMIT 1');
+        }
+        catch (err) {
+            // Column doesn't exist, add it
+            await pool.query('ALTER TABLE product_images ADD COLUMN IF NOT EXISTS display_order INTEGER');
+        }
+        // Update each image's display_order
+        for (const img of images) {
+            if (img.id && typeof img.display_order === 'number') {
+                await pool.query('UPDATE product_images SET display_order = $1 WHERE id = $2 AND product_id = $3 AND (type = $4 OR ($4 IS NULL AND type IS NULL))', [img.display_order, img.id, id, type || null]);
+            }
+        }
+        (0, apiHelpers_1.sendSuccess)(res, { message: 'Image order updated successfully' });
+    }
+    catch (err) {
+        console.error('Failed to reorder images:', err);
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to reorder images', err);
     }
 }
 // Optimized CSV endpoint with correct path
