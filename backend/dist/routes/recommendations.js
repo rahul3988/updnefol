@@ -17,8 +17,10 @@ async function trackProductView(pool, req, res) {
         }
         // Check if product exists before tracking
         const productCheck = await pool.query('SELECT id FROM products WHERE id = $1', [productId]);
+        // If product doesn't exist, silently return success (don't track, but don't error)
+        // This prevents 404 errors for deleted or non-existent products
         if (productCheck.rows.length === 0) {
-            return (0, apiHelpers_1.sendError)(res, 404, 'Product not found');
+            return (0, apiHelpers_1.sendSuccess)(res, { message: 'Product not found, view not tracked' });
         }
         // Get userId from token if authenticated, otherwise null
         const userId = req.userId || null;
