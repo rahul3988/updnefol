@@ -17,8 +17,10 @@ exports.sendSubscriptionActivatedEmail = sendSubscriptionActivatedEmail;
 exports.sendSubscriptionReminderOrCancelledEmail = sendSubscriptionReminderOrCancelledEmail;
 exports.sendAffiliateCodeEmail = sendAffiliateCodeEmail;
 exports.sendAffiliateApplicationSubmittedEmail = sendAffiliateApplicationSubmittedEmail;
+exports.sendInvoicePDFEmail = sendInvoicePDFEmail;
 // Email Service - All 6 Email Automation Events
 const email_1 = require("../utils/email");
+const pdfGenerator_1 = require("../utils/pdfGenerator");
 // 1. Welcome Email - User Signup
 async function sendWelcomeEmail(userEmail, userName) {
     try {
@@ -933,5 +935,65 @@ async function sendAffiliateApplicationSubmittedEmail(userEmail, userName) {
     catch (error) {
         console.error('❌ Error sending affiliate application confirmation email:', error);
         // Don't throw - email failures shouldn't break the application submission
+    }
+}
+// 17. Send Invoice PDF Email - Automatically send invoice PDF when order is created
+async function sendInvoicePDFEmail(pool, order, baseUrl = 'https://thenefol.com') {
+    try {
+        // Generate PDF invoice
+        const pdfBuffer = await (0, pdfGenerator_1.generateInvoicePDF)(pool, order, baseUrl);
+        const invoiceFileName = `Invoice-${order.invoice_number || order.order_number || order.id}.pdf`;
+        const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Invoice - ${order.order_number}</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 10px;">
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+        </div>
+        <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: #fff; margin: 0;">Your Invoice</h1>
+        </div>
+        <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">Hi ${order.customer_name},</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">Thank you for your order! Please find your invoice attached to this email.</p>
+          
+          <div style="background: #fff; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #667eea;">Order Details</h3>
+            <p><strong>Order Number:</strong> ${order.order_number}</p>
+            ${order.invoice_number ? `<p><strong>Invoice Number:</strong> ${order.invoice_number}</p>` : ''}
+            <p><strong>Order Date:</strong> ${new Date(order.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p><strong>Total Amount:</strong> ₹${parseFloat(order.total || 0).toFixed(2)}</p>
+          </div>
+
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">The invoice PDF is attached to this email for your records.</p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">If you have any questions about your order, please contact us at ${(0, email_1.getAdminEmail)()}</p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Thank you for shopping with NEFOL®!</p>
+        </div>
+      </body>
+      </html>
+    `;
+        await email_1.transporter.sendMail({
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
+            to: order.customer_email,
+            subject: `Invoice - Order ${order.order_number}`,
+            html,
+            attachments: [
+                {
+                    filename: invoiceFileName,
+                    content: pdfBuffer,
+                    contentType: 'application/pdf'
+                }
+            ]
+        });
+        console.log(`✅ Invoice PDF email sent to: ${order.customer_email} for order: ${order.order_number}`);
+    }
+    catch (error) {
+        console.error('❌ Error sending invoice PDF email:', error);
+        // Don't throw - email failures shouldn't break order creation
     }
 }

@@ -2792,6 +2792,10 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
         (0, emailService_1.sendOrderConfirmationEmail)(order, true).catch(err => {
             console.error('Failed to send order confirmation email to admin:', err);
         });
+        // Send invoice PDF email automatically (async, don't wait)
+        (0, emailService_1.sendInvoicePDFEmail)(pool, order, req.protocol && req.get('host') ? `${req.protocol}://${req.get('host')}` : 'https://thenefol.com').catch(err => {
+            console.error('Failed to send invoice PDF email:', err);
+        });
         (0, apiHelpers_1.sendSuccess)(res, order, 201);
     }
     catch (err) {
