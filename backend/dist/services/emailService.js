@@ -28,31 +28,31 @@ async function sendWelcomeEmail(userEmail, userName) {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Welcome to Thenefol</title>
+        <title>Welcome to NEFOL®</title>
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <h1 style="color: #fff; margin: 0;">Welcome to Thenefol!</h1>
+          <h1 style="color: #fff; margin: 0;">Welcome to NEFOL®!</h1>
         </div>
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
-          <p style="font-size: 16px; margin-bottom: 20px;">Your account is ready! We're thrilled to have you join the Thenefol family.</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">Your account is ready! We're thrilled to have you join the NEFOL® family.</p>
           <p style="font-size: 16px; margin-bottom: 20px;">Start exploring our premium skincare and beauty products crafted with care.</p>
           <div style="text-align: center; margin: 30px 0;">
             <a href="https://thenefol.com" style="background: #667eea; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Start Shopping</a>
           </div>
-          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you for choosing Thenefol!</p>
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you for choosing NEFOL®!</p>
         </div>
       </body>
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'Welcome to Thenefol — your account is ready.',
+            subject: 'Welcome to NEFOL® — your account is ready.',
             html
         });
         console.log(`✅ Welcome email sent to: ${userEmail}`);
@@ -75,7 +75,7 @@ async function sendCartAddedEmail(userEmail, userName, productName, productPrice
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h2 style="color: #fff; margin: 0;">Item Added to Your Cart</h2>
@@ -96,7 +96,7 @@ async function sendCartAddedEmail(userEmail, userName, productName, productPrice
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
             subject: `${productName} added to your cart`,
             html
@@ -146,7 +146,7 @@ async function sendOrderConfirmationEmail(order, sendToAdmin = false) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Order Confirmed!</h1>
@@ -205,7 +205,7 @@ async function sendOrderConfirmationEmail(order, sendToAdmin = false) {
             </table>
           </div>
 
-          <p style="font-size: 14px; color: #666; margin-top: 30px;">We'll send you another email once your order ships. Thank you for shopping with Thenefol!</p>
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">We'll send you another email once your order ships. Thank you for shopping with NEFOL®!</p>
         </div>
       </body>
       </html>
@@ -215,7 +215,7 @@ async function sendOrderConfirmationEmail(order, sendToAdmin = false) {
             ? `[Admin] New Order: ${order.order_number}`
             : `Order Confirmation - ${order.order_number}`;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: recipient,
             subject,
             html
@@ -240,7 +240,7 @@ async function sendPaymentFailedEmail(userEmail, userName, orderNumber, errorMes
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #dc3545; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Payment Failed</h1>
@@ -259,7 +259,7 @@ async function sendPaymentFailedEmail(userEmail, userName, orderNumber, errorMes
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
             subject: `Payment Failed - Order ${orderNumber}`,
             html
@@ -312,7 +312,7 @@ async function sendOrderStatusUpdateEmail(order) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: ${statusInfo.color}; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">${statusInfo.title}</h1>
@@ -332,13 +332,13 @@ async function sendOrderStatusUpdateEmail(order) {
             <a href="https://thenefol.com/#/user/orders" style="background: ${statusInfo.color}; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">View Order Details</a>
           </div>
 
-          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you for shopping with Thenefol!</p>
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you for shopping with NEFOL®!</p>
         </div>
       </body>
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: order.customer_email,
             subject: `${statusInfo.title} - Order ${order.order_number}`,
             html
@@ -373,7 +373,7 @@ async function sendCartAbandonmentEmail(userEmail, userName, cartItems) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #ffc107; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #333; margin: 0;">Don't Miss Out!</h1>
@@ -414,7 +414,7 @@ async function sendCartAbandonmentEmail(userEmail, userName, cartItems) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
             subject: 'Complete Your Purchase - Items Waiting in Your Cart',
             html
@@ -439,14 +439,14 @@ async function sendPasswordResetEmail(userEmail, userName, resetLink) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #667eea; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Password Reset Request</h1>
         </div>
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
-          <p style="font-size: 16px; margin-bottom: 20px;">We received a request to reset your password for your Thenefol account.</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">We received a request to reset your password for your NEFOL® account.</p>
           
           <div style="text-align: center; margin: 30px 0;">
             <a href="${resetLink}" style="background: #667eea; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">Reset Your Password</a>
@@ -463,15 +463,15 @@ async function sendPasswordResetEmail(userEmail, userName, resetLink) {
           
           <p style="font-size: 14px; color: #666; margin-top: 30px;">If you continue to have problems, please contact our support team.</p>
           
-          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you,<br>The Thenefol Team</p>
+          <p style="font-size: 14px; color: #666; margin-top: 30px;">Thank you,<br>The NEFOL® Team</p>
         </div>
       </body>
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'Reset Your Password - Thenefol',
+            subject: 'Reset Your Password - NEFOL®',
             html
         });
         console.log(`✅ Password reset email sent to: ${userEmail}`);
@@ -494,14 +494,14 @@ async function sendPasswordResetConfirmationEmail(userEmail) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Your password has been changed</h1>
         </div>
         <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">
-            This is a confirmation that the password for your Thenefol account was just updated.
+            This is a confirmation that the password for your NEFOL® account was just updated.
           </p>
           <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
             If this was you, no further action is needed. You can now sign in with your new password.
@@ -522,9 +522,9 @@ async function sendPasswordResetConfirmationEmail(userEmail) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'Your Thenefol password has been changed',
+            subject: 'Your NEFOL® password has been changed',
             html
         });
         console.log(`✅ Password reset confirmation email sent to: ${userEmail}`);
@@ -547,14 +547,14 @@ async function sendVerificationEmail(userEmail, otp) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Verify your email</h1>
         </div>
         <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">
-            Please use the one-time code below to verify your email address for your Thenefol account.
+            Please use the one-time code below to verify your email address for your NEFOL® account.
           </p>
           <div style="background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #E0EAEA; text-align: center; margin: 20px 0;">
             <span style="display: inline-block; font-size: 26px; letter-spacing: 8px; font-weight: bold; color: #333;">
@@ -572,9 +572,9 @@ async function sendVerificationEmail(userEmail, otp) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'Verify your email address - Thenefol',
+            subject: 'Verify your email address - NEFOL®',
             html
         });
         console.log(`✅ Verification email sent to: ${userEmail}`);
@@ -599,14 +599,14 @@ async function sendLoginAlertEmail(userEmail, ipAddress, deviceInfo) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">New login to your account</h1>
         </div>
         <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">
-            A new login to your Thenefol account was just detected.
+            A new login to your NEFOL® account was just detected.
           </p>
           <div style="background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #E0EAEA; margin: 20px 0;">
             <p style="margin: 0 0 8px 0; font-size: 14px;"><strong>Device:</strong> ${safeDevice}</p>
@@ -629,9 +629,9 @@ async function sendLoginAlertEmail(userEmail, ipAddress, deviceInfo) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'New login detected on your Thenefol account',
+            subject: 'New login detected on your NEFOL® account',
             html
         });
         console.log(`✅ Login alert email sent to: ${userEmail}`);
@@ -654,7 +654,7 @@ async function sendAccountSecurityAlertEmail(userEmail, action) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #dc3545; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Account security alert</h1>
@@ -679,9 +679,9 @@ async function sendAccountSecurityAlertEmail(userEmail, action) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'Security alert on your Thenefol account',
+            subject: 'Security alert on your NEFOL® account',
             html
         });
         console.log(`✅ Account security alert email sent to: ${userEmail}`);
@@ -727,14 +727,14 @@ async function sendSubscriptionActivatedEmail(userEmail, plan) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Your subscription is active</h1>
         </div>
         <div style="background: #F4F9F9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">
-            Thank you for subscribing to ${planName} at Thenefol.
+            Thank you for subscribing to ${planName} at NEFOL®.
           </p>
           ${priceText ? `
           <p style="font-size: 14px; color: #555; margin-bottom: 20px;">
@@ -753,9 +753,9 @@ async function sendSubscriptionActivatedEmail(userEmail, plan) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
-            subject: 'Your Thenefol subscription is active',
+            subject: 'Your NEFOL® subscription is active',
             html
         });
         console.log(`✅ Subscription activated email sent to: ${userEmail}`);
@@ -772,8 +772,8 @@ async function sendSubscriptionReminderOrCancelledEmail(userEmail, plan, type) {
         const isExpiring = normalizedType === 'expiring';
         const title = isExpiring ? 'Your subscription is ending soon' : 'Your subscription has been cancelled';
         const subject = isExpiring
-            ? 'Your Thenefol subscription is ending soon'
-            : 'Your Thenefol subscription has been cancelled';
+            ? 'Your NEFOL® subscription is ending soon'
+            : 'Your NEFOL® subscription has been cancelled';
         const mainMessage = isExpiring
             ? `Your plan for ${planName} will end soon. If you want to keep your benefits, you can renew your subscription before it expires.`
             : `Your plan for ${planName} has been cancelled. You will keep access until the end of your current billing period, if applicable.`;
@@ -789,7 +789,7 @@ async function sendSubscriptionReminderOrCancelledEmail(userEmail, plan, type) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: #7DD3D3; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">${title}</h1>
@@ -811,7 +811,7 @@ async function sendSubscriptionReminderOrCancelledEmail(userEmail, plan, type) {
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL®" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
             subject,
             html
@@ -835,7 +835,7 @@ async function sendAffiliateCodeEmail(userEmail, userName, verificationCode) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">🎉 Congratulations!</h1>
@@ -843,7 +843,7 @@ async function sendAffiliateCodeEmail(userEmail, userName, verificationCode) {
         </div>
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
-          <p style="font-size: 16px; margin-bottom: 20px;">We're thrilled to inform you that your affiliate application has been approved! Welcome to the Nefol Affiliate Program.</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">We're thrilled to inform you that your affiliate application has been approved! Welcome to the NEFOL® Affiliate Program.</p>
           <div style="background: #fff; padding: 25px; border-radius: 8px; margin: 25px 0; border: 2px solid #667eea; text-align: center;">
             <p style="margin: 0 0 10px 0; font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 1px;">Your Affiliate Verification Code</p>
             <p style="margin: 0; font-size: 28px; font-weight: bold; color: #667eea; letter-spacing: 2px; font-family: 'Courier New', monospace;">${verificationCode}</p>
@@ -862,14 +862,14 @@ async function sendAffiliateCodeEmail(userEmail, userName, verificationCode) {
             <p style="margin: 0; font-size: 14px; color: #555;"><strong>Important:</strong> Keep this verification code secure. You'll need it to verify your affiliate account and access your dashboard.</p>
           </div>
           <p style="font-size: 14px; color: #666; margin-top: 30px;">If you have any questions, feel free to reach out to us at <a href="mailto:support@thenefol.com" style="color: #667eea;">support@thenefol.com</a></p>
-          <p style="font-size: 14px; color: #666; margin-top: 20px;">Welcome aboard! We're excited to have you as part of the Nefol family.</p>
-          <p style="font-size: 14px; color: #666; margin-top: 20px;">Best regards,<br><strong>The Nefol Team</strong></p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Welcome aboard! We're excited to have you as part of the NEFOL® family.</p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Best regards,<br><strong>The NEFOL® Team</strong></p>
         </div>
       </body>
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol Affiliate Program" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL® Affiliate Program" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
             subject: '🎉 Your Affiliate Application Has Been Approved - Verification Code',
             html
@@ -894,7 +894,7 @@ async function sendAffiliateApplicationSubmittedEmail(userEmail, userName) {
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 10px;">
-          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="Thenefol Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
+          <img src="https://thenefol.com//IMAGES/light%20theme%20logo.webp" alt="NEFOL® Logo" width="150" style="display: block; margin: 0 auto 20px auto;" />
         </div>
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
           <h1 style="color: #fff; margin: 0;">Application Received!</h1>
@@ -902,7 +902,7 @@ async function sendAffiliateApplicationSubmittedEmail(userEmail, userName) {
         </div>
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px; margin-bottom: 20px;">Hi ${userName},</p>
-          <p style="font-size: 16px; margin-bottom: 20px;">Thank you for applying to join the Nefol Affiliate Program! We've received your application and our team is reviewing it.</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">Thank you for applying to join the NEFOL® Affiliate Program! We've received your application and our team is reviewing it.</p>
           <div style="background: #fff; padding: 25px; border-radius: 8px; margin: 25px 0; border: 2px solid #667eea;">
             <p style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold; color: #667eea;">What Happens Next?</p>
             <ul style="font-size: 16px; margin: 0; padding-left: 20px; color: #555;">
@@ -916,14 +916,14 @@ async function sendAffiliateApplicationSubmittedEmail(userEmail, userName) {
             <p style="margin: 0; font-size: 14px; color: #555;"><strong>Note:</strong> Please check your email regularly for updates on your application status. Make sure to check your spam folder as well.</p>
           </div>
           <p style="font-size: 14px; color: #666; margin-top: 30px;">If you have any questions about your application, feel free to reach out to us at <a href="mailto:support@thenefol.com" style="color: #667eea;">support@thenefol.com</a></p>
-          <p style="font-size: 14px; color: #666; margin-top: 20px;">We appreciate your interest in partnering with Nefol!</p>
-          <p style="font-size: 14px; color: #666; margin-top: 20px;">Best regards,<br><strong>The Nefol Team</strong></p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">We appreciate your interest in partnering with NEFOL®!</p>
+          <p style="font-size: 14px; color: #666; margin-top: 20px;">Best regards,<br><strong>The NEFOL® Team</strong></p>
         </div>
       </body>
       </html>
     `;
         await email_1.transporter.sendMail({
-            from: `"Thenefol Affiliate Program" <${(0, email_1.getAdminEmail)()}>`,
+            from: `"NEFOL® Affiliate Program" <${(0, email_1.getAdminEmail)()}>`,
             to: userEmail,
             subject: '✅ Your Affiliate Application Has Been Received',
             html
