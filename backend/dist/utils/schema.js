@@ -1541,6 +1541,20 @@ async function ensureSchema(pool) {
       created_at timestamptz default now()
     );
 
+    -- Staff Layout Permissions (for assigning layout page access)
+    create table if not exists staff_layout_permissions (
+      id serial primary key,
+      staff_id integer not null references staff_users(id) on delete cascade,
+      layout_page_slug text not null,
+      can_edit boolean default true,
+      created_at timestamptz default now(),
+      updated_at timestamptz default now(),
+      unique(staff_id, layout_page_slug)
+    );
+
+    create index if not exists idx_staff_layout_permissions_staff on staff_layout_permissions(staff_id);
+    create index if not exists idx_staff_layout_permissions_layout on staff_layout_permissions(layout_page_slug);
+
     -- Coin Withdrawal System
     create table if not exists coin_withdrawals (
       id serial primary key,

@@ -855,6 +855,11 @@ app.post('/api/staff/auth/change-password', staffAuthMiddleware, (req, res) => s
 app.post('/api/staff/users/reset-password', (req, res) => staffRoutes.resetPassword(pool, req, res));
 app.post('/api/staff/users/disable', (req, res) => staffRoutes.disableStaff(pool, req, res));
 app.post('/api/staff/seed-standard', (req, res) => staffRoutes.seedStandardRolesAndPermissions(pool, req, res));
+app.post('/api/staff/users/bulk-create', (req, res) => staffRoutes.bulkCreateStaff(pool, req, res));
+app.get('/api/staff/layout-pages', (req, res) => staffRoutes.listLayoutPages(pool, req, res));
+app.post('/api/staff/layout-permissions', (req, res) => staffRoutes.assignLayoutPermissions(pool, req, res));
+app.get('/api/staff/:staffId/layout-permissions', (req, res) => staffRoutes.getStaffLayoutPermissions(pool, req, res));
+app.get('/api/staff/users/with-layouts', (req, res) => staffRoutes.listStaffWithLayoutPermissions(pool, req, res));
 // ==================== WAREHOUSES ====================
 app.post('/api/warehouses', (req, res) => warehouseRoutes.createWarehouse(pool, req, res));
 app.get('/api/warehouses', (req, res) => warehouseRoutes.listWarehouses(pool, req, res));

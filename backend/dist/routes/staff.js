@@ -23,6 +23,11 @@ exports.staffChangePassword = staffChangePassword;
 exports.resetPassword = resetPassword;
 exports.disableStaff = disableStaff;
 exports.seedStandardRolesAndPermissions = seedStandardRolesAndPermissions;
+exports.bulkCreateStaff = bulkCreateStaff;
+exports.listLayoutPages = listLayoutPages;
+exports.assignLayoutPermissions = assignLayoutPermissions;
+exports.getStaffLayoutPermissions = getStaffLayoutPermissions;
+exports.listStaffWithLayoutPermissions = listStaffWithLayoutPermissions;
 const apiHelpers_1 = require("../utils/apiHelpers");
 const crypto_1 = __importDefault(require("crypto"));
 function hashPassword(plain) {
@@ -105,13 +110,15 @@ async function getStaffContextByToken(pool, token) {
         su.email,
         su.is_active,
         coalesce(json_agg(distinct r.name) filter (where r.id is not null), '[]'::json) as roles,
-        coalesce(json_agg(distinct p.code) filter (where p.id is not null), '[]'::json) as permissions
+        coalesce(json_agg(distinct p.code) filter (where p.id is not null), '[]'::json) as permissions,
+        coalesce(json_agg(distinct slp.layout_page_slug) filter (where slp.id is not null), '[]'::json) as layout_permissions
       from staff_sessions ss
       inner join staff_users su on su.id = ss.staff_id
       left join staff_roles sr on sr.staff_id = su.id
       left join roles r on r.id = sr.role_id
       left join role_permissions rp on rp.role_id = r.id
       left join permissions p on p.id = rp.permission_id
+      left join staff_layout_permissions slp on slp.staff_id = su.id
       where ss.token = $1
       group by ss.id, su.id
     `, [token]);
@@ -126,6 +133,7 @@ async function getStaffContextByToken(pool, token) {
         return null;
     const roles = toStringArray(row.roles);
     const permissions = toStringArray(row.permissions);
+    const layoutPermissions = toStringArray(row.layout_permissions);
     return {
         staffId: row.staff_id,
         sessionId: row.session_id,
@@ -134,7 +142,8 @@ async function getStaffContextByToken(pool, token) {
         email: row.email,
         roles,
         permissions,
-        primaryRole: roles[0] || 'admin'
+        primaryRole: roles[0] || 'admin',
+        layoutPermissions
     };
 }
 function createStaffAuthMiddleware(pool) {
@@ -154,6 +163,7 @@ function createStaffAuthMiddleware(pool) {
             req.staffSessionToken = context.token;
             req.userRole = context.primaryRole;
             req.userPermissions = context.permissions;
+            req.staffLayoutPermissions = context.layoutPermissions;
             req.staffContext = context;
             next();
         }
@@ -518,5 +528,123 @@ async function seedStandardRolesAndPermissions(pool, req, res) {
     catch (err) {
         await pool.query('rollback');
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to seed roles/permissions', err);
+    }
+}
+// Bulk create admin users
+async function bulkCreateStaff(pool, req, res) {
+    try {
+        const { users } = req.body || {};
+        if (!Array.isArray(users) || users.length === 0) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'users array is required and must not be empty');
+        }
+        const results = [];
+        await pool.query('begin');
+        for (const user of users) {
+            const { name, email, password } = user || {};
+            if (!name || !email || !password) {
+                continue; // Skip invalid entries
+            }
+            try {
+                const hashed = hashPassword(password);
+                const { rows } = await pool.query(`insert into staff_users (name, email, password, is_active, created_at, updated_at) 
+           values ($1, $2, $3, true, now(), now()) 
+           returning id, name, email, created_at`, [name, email, hashed]);
+                await logStaff(pool, rows[0]?.id || null, 'staff_create', { email });
+                results.push({ success: true, user: rows[0] });
+            }
+            catch (err) {
+                // Handle duplicate email or other errors
+                if (err.code === '23505') { // Unique violation
+                    results.push({ success: false, email, error: 'Email already exists' });
+                }
+                else {
+                    results.push({ success: false, email, error: err.message || 'Failed to create user' });
+                }
+            }
+        }
+        await pool.query('commit');
+        (0, apiHelpers_1.sendSuccess)(res, { results, created: results.filter(r => r.success).length, failed: results.filter(r => !r.success).length }, 201);
+    }
+    catch (err) {
+        await pool.query('rollback');
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to bulk create staff users', err);
+    }
+}
+// Get all layout pages (CMS pages)
+async function listLayoutPages(pool, req, res) {
+    try {
+        const { rows } = await pool.query(`select id, slug, title, is_active, created_at, updated_at 
+       from cms_pages 
+       order by title asc`);
+        (0, apiHelpers_1.sendSuccess)(res, rows);
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to list layout pages', err);
+    }
+}
+// Assign layout permissions to staff
+async function assignLayoutPermissions(pool, req, res) {
+    try {
+        const { staffId, layoutPageSlugs } = req.body || {};
+        const validationError = (0, apiHelpers_1.validateRequired)({ staffId }, ['staffId']);
+        if (validationError)
+            return (0, apiHelpers_1.sendError)(res, 400, validationError);
+        const slugs = Array.isArray(layoutPageSlugs) ? layoutPageSlugs : [];
+        await pool.query('begin');
+        // Remove existing permissions for this staff
+        await pool.query('delete from staff_layout_permissions where staff_id = $1', [staffId]);
+        // Add new permissions
+        for (const slug of slugs) {
+            if (slug && typeof slug === 'string') {
+                await pool.query(`insert into staff_layout_permissions (staff_id, layout_page_slug, can_edit, created_at, updated_at) 
+           values ($1, $2, true, now(), now()) 
+           on conflict (staff_id, layout_page_slug) do update set updated_at = now()`, [staffId, slug]);
+            }
+        }
+        await pool.query('commit');
+        await logStaff(pool, staffId, 'assign_layout_permissions', { layoutPageSlugs: slugs });
+        (0, apiHelpers_1.sendSuccess)(res, { staffId, layoutPageSlugs: slugs }, 201);
+    }
+    catch (err) {
+        await pool.query('rollback');
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to assign layout permissions', err);
+    }
+}
+// Get layout permissions for a staff member
+async function getStaffLayoutPermissions(pool, req, res) {
+    try {
+        const { staffId } = req.params || {};
+        if (!staffId) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'staffId is required');
+        }
+        const { rows } = await pool.query(`select layout_page_slug, can_edit, created_at 
+       from staff_layout_permissions 
+       where staff_id = $1 
+       order by layout_page_slug asc`, [staffId]);
+        (0, apiHelpers_1.sendSuccess)(res, rows);
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to get staff layout permissions', err);
+    }
+}
+// Get all staff with their layout permissions
+async function listStaffWithLayoutPermissions(pool, req, res) {
+    try {
+        const { rows } = await pool.query(`select 
+        su.id, su.name, su.email, su.is_active,
+        coalesce(json_agg(
+          json_build_object(
+            'layout_page_slug', slp.layout_page_slug,
+            'can_edit', slp.can_edit
+          )
+        ) filter (where slp.id is not null), '[]'::json) as layout_permissions
+       from staff_users su
+       left join staff_layout_permissions slp on slp.staff_id = su.id
+       group by su.id
+       order by su.created_at desc`);
+        (0, apiHelpers_1.sendSuccess)(res, rows);
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to list staff with layout permissions', err);
     }
 }
