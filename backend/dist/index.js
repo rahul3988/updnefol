@@ -860,6 +860,9 @@ app.get('/api/staff/layout-pages', (req, res) => staffRoutes.listLayoutPages(poo
 app.post('/api/staff/layout-permissions', (req, res) => staffRoutes.assignLayoutPermissions(pool, req, res));
 app.get('/api/staff/:staffId/layout-permissions', (req, res) => staffRoutes.getStaffLayoutPermissions(pool, req, res));
 app.get('/api/staff/users/with-layouts', (req, res) => staffRoutes.listStaffWithLayoutPermissions(pool, req, res));
+app.get('/api/staff/admin-pages', (req, res) => staffRoutes.listAdminPanelPages(pool, req, res));
+app.post('/api/staff/page-permissions', (req, res) => staffRoutes.assignPagePermissions(pool, req, res));
+app.get('/api/staff/:staffId/page-permissions', (req, res) => staffRoutes.getStaffPagePermissions(pool, req, res));
 // ==================== WAREHOUSES ====================
 app.post('/api/warehouses', (req, res) => warehouseRoutes.createWarehouse(pool, req, res));
 app.get('/api/warehouses', (req, res) => warehouseRoutes.listWarehouses(pool, req, res));

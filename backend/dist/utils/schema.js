@@ -1555,6 +1555,20 @@ async function ensureSchema(pool) {
     create index if not exists idx_staff_layout_permissions_staff on staff_layout_permissions(staff_id);
     create index if not exists idx_staff_layout_permissions_layout on staff_layout_permissions(layout_page_slug);
 
+    -- Staff Admin Panel Page Permissions (for assigning admin panel page access)
+    create table if not exists staff_page_permissions (
+      id serial primary key,
+      staff_id integer not null references staff_users(id) on delete cascade,
+      page_path text not null,
+      can_access boolean default true,
+      created_at timestamptz default now(),
+      updated_at timestamptz default now(),
+      unique(staff_id, page_path)
+    );
+
+    create index if not exists idx_staff_page_permissions_staff on staff_page_permissions(staff_id);
+    create index if not exists idx_staff_page_permissions_page on staff_page_permissions(page_path);
+
     -- Coin Withdrawal System
     create table if not exists coin_withdrawals (
       id serial primary key,
