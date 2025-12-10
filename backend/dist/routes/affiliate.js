@@ -159,6 +159,15 @@ async function approveAffiliateApplication(pool, req, res) {
         const application = appResult.rows[0];
         // Generate verification code
         const verificationCode = generateVerificationCode();
+        // Generate unique Affiliate Partner ID (Membership ID)
+        // Format: AP + 8-digit number (e.g., AP00000001)
+        const partnerIdResult = await pool.query(`
+      SELECT COALESCE(MAX(CAST(SUBSTRING(partner_id FROM 3) AS INTEGER)), 0) + 1 as next_id
+      FROM affiliate_partners
+      WHERE partner_id IS NOT NULL AND partner_id ~ '^AP[0-9]+$'
+    `);
+        const nextPartnerId = partnerIdResult.rows[0]?.next_id || 1;
+        const partnerId = `AP${nextPartnerId.toString().padStart(8, '0')}`;
         // Update application status
         const { rows } = await pool.query(`
       UPDATE affiliate_applications 
@@ -166,14 +175,14 @@ async function approveAffiliateApplication(pool, req, res) {
       WHERE id = $4
       RETURNING *
     `, [verificationCode, adminNotes || null, new Date(), id]);
-        // Create affiliate partner record
+        // Create affiliate partner record with Partner ID
         await pool.query(`
       INSERT INTO affiliate_partners (
-        application_id, name, email, phone, verification_code, status, commission_rate,
+        application_id, name, email, phone, verification_code, partner_id, status, commission_rate,
         total_earnings, total_referrals, pending_earnings, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     `, [
-            id, application.name, application.email, application.phone, verificationCode,
+            id, application.name, application.email, application.phone, verificationCode, partnerId,
             'unverified', 10.0, 0, 0, 0, new Date()
         ]);
         // Send Email notification with verification code (if email is available)

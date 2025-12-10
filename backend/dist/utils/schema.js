@@ -453,6 +453,7 @@ async function ensureSchema(pool) {
       email text not null,
       phone text not null,
       verification_code text unique not null,
+      partner_id text unique, -- Unique Affiliate Partner ID (Membership ID)
       status text not null default 'unverified' check (status in ('unverified', 'active', 'suspended', 'terminated')),
       commission_rate numeric(5,2) default 15.0,
       total_earnings numeric(12,2) default 0,
