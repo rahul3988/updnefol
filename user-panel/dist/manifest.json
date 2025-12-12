@@ -10,6 +10,12 @@
   "scope": "/",
   "icons": [
     {
+      "src": "/IMAGES/NEFOL icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
