@@ -733,6 +733,8 @@ app.get('/api/inventory/:productId/summary', (req, res) => inventoryRoutes.getIn
 app.post('/api/inventory/:productId/:variantId/adjust', (req, res) => inventoryRoutes.adjustStock(pool, req, res));
 app.post('/api/inventory/:productId/:variantId/low-threshold', (req, res) => inventoryRoutes.setLowStockThreshold(pool, req, res));
 app.get('/api/inventory/low-stock', (req, res) => inventoryRoutes.listLowStock(pool, req, res));
+app.get('/api/inventory/all', (req, res) => inventoryRoutes.getAllProductsWithInventory(pool, req, res));
+app.put('/api/inventory/:productId/:variantId/quantity', (req, res) => inventoryRoutes.setStockQuantity(pool, req, res));
 // ==================== SHIPROCKET ====================
 app.get('/api/shiprocket/config', authenticateAndAttach, (0, apiHelpers_1.requireRole)(['admin']), (req, res) => shiprocketRoutes.getShiprocketConfig(pool, req, res));
 app.post('/api/shiprocket/config', authenticateAndAttach, (0, apiHelpers_1.requireRole)(['admin']), (req, res) => shiprocketRoutes.saveShiprocketConfig(pool, req, res));

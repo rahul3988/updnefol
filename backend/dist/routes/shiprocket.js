@@ -535,7 +535,67 @@ async function autoCreateShiprocketShipment(pool, order) {
                 ]);
             }
             console.log(`✅ Shiprocket shipment created automatically for order ${order.order_number}, shipment_id: ${shipmentId}`);
-            return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: awbCode || undefined };
+            // If AWB code is not present, try to generate it automatically
+            let finalAwbCode = awbCode;
+            if (!finalAwbCode && shipmentId) {
+                try {
+                    console.log(`🔄 Attempting to auto-generate AWB for shipment ${shipmentId}`);
+                    const awbResp = await fetch(`${baseUrl}/courier/assign/awb`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${shiprocketToken}`
+                        },
+                        body: JSON.stringify({
+                            shipment_id: shipmentId,
+                            courier_id: null // Let Shiprocket auto-assign courier
+                        })
+                    });
+                    const awbData = await awbResp.json();
+                    if (awbResp.ok && awbData) {
+                        finalAwbCode = awbData?.response?.awb_code || awbData?.awb_code || null;
+                        if (finalAwbCode) {
+                            console.log(`✅ AWB generated automatically: ${finalAwbCode}`);
+                            // Update database with AWB code
+                            await pool.query(`UPDATE shiprocket_shipments 
+                 SET awb_code = $1, status = 'ready_to_ship', updated_at = NOW()
+                 WHERE order_id = $2`, [finalAwbCode, order.id]);
+                            // Try to generate label if AWB is available
+                            try {
+                                const labelResp = await fetch(`${baseUrl}/courier/generate/label`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${shiprocketToken}`
+                                    },
+                                    body: JSON.stringify({ shipment_id: shipmentId })
+                                });
+                                const labelData = await labelResp.json();
+                                if (labelResp.ok && labelData) {
+                                    const labelUrl = labelData?.label_url || labelData?.label_url_pdf || null;
+                                    if (labelUrl) {
+                                        await pool.query(`UPDATE shiprocket_shipments SET label_url = $1 WHERE order_id = $2`, [labelUrl, order.id]);
+                                    }
+                                }
+                            }
+                            catch (labelErr) {
+                                console.error('⚠️ Error generating label (non-critical):', labelErr);
+                            }
+                        }
+                        else {
+                            console.log(`⚠️ AWB generation response received but no AWB code found`);
+                        }
+                    }
+                    else {
+                        console.log(`⚠️ AWB generation failed (non-critical):`, awbData?.message || 'Unknown error');
+                    }
+                }
+                catch (awbErr) {
+                    console.error('⚠️ Error auto-generating AWB (non-critical):', awbErr.message);
+                    // Don't fail the whole process if AWB generation fails
+                }
+            }
+            return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: finalAwbCode || undefined };
         }
         else {
             // Handle pickup location errors with retry
@@ -585,7 +645,67 @@ async function autoCreateShiprocketShipment(pool, order) {
                         ]);
                     }
                     console.log(`✅ Shiprocket shipment created automatically (after retry) for order ${order.order_number}, shipment_id: ${shipmentId}`);
-                    return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: awbCode || undefined };
+                    // If AWB code is not present, try to generate it automatically
+                    let finalAwbCode = awbCode;
+                    if (!finalAwbCode && shipmentId) {
+                        try {
+                            console.log(`🔄 Attempting to auto-generate AWB for shipment ${shipmentId}`);
+                            const awbResp = await fetch(`${baseUrl}/courier/assign/awb`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${shiprocketToken}`
+                                },
+                                body: JSON.stringify({
+                                    shipment_id: shipmentId,
+                                    courier_id: null // Let Shiprocket auto-assign courier
+                                })
+                            });
+                            const awbData = await awbResp.json();
+                            if (awbResp.ok && awbData) {
+                                finalAwbCode = awbData?.response?.awb_code || awbData?.awb_code || null;
+                                if (finalAwbCode) {
+                                    console.log(`✅ AWB generated automatically: ${finalAwbCode}`);
+                                    // Update database with AWB code
+                                    await pool.query(`UPDATE shiprocket_shipments 
+                     SET awb_code = $1, status = 'ready_to_ship', updated_at = NOW()
+                     WHERE order_id = $2`, [finalAwbCode, order.id]);
+                                    // Try to generate label if AWB is available
+                                    try {
+                                        const labelResp = await fetch(`${baseUrl}/courier/generate/label`, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${shiprocketToken}`
+                                            },
+                                            body: JSON.stringify({ shipment_id: shipmentId })
+                                        });
+                                        const labelData = await labelResp.json();
+                                        if (labelResp.ok && labelData) {
+                                            const labelUrl = labelData?.label_url || labelData?.label_url_pdf || null;
+                                            if (labelUrl) {
+                                                await pool.query(`UPDATE shiprocket_shipments SET label_url = $1 WHERE order_id = $2`, [labelUrl, order.id]);
+                                            }
+                                        }
+                                    }
+                                    catch (labelErr) {
+                                        console.error('⚠️ Error generating label (non-critical):', labelErr);
+                                    }
+                                }
+                                else {
+                                    console.log(`⚠️ AWB generation response received but no AWB code found`);
+                                }
+                            }
+                            else {
+                                console.log(`⚠️ AWB generation failed (non-critical):`, awbData?.message || 'Unknown error');
+                            }
+                        }
+                        catch (awbErr) {
+                            console.error('⚠️ Error auto-generating AWB (non-critical):', awbErr.message);
+                            // Don't fail the whole process if AWB generation fails
+                        }
+                    }
+                    return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: finalAwbCode || undefined };
                 }
                 else {
                     console.error('⚠️ Failed to auto-create Shiprocket shipment (after retry):', retryData);
