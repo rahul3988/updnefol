@@ -91,6 +91,7 @@ const apiManager_1 = require("./routes/apiManager");
 const whatsappScheduler_1 = require("./utils/whatsappScheduler");
 const emailService_1 = require("./services/emailService");
 const cartAbandonment_1 = require("./cron/cartAbandonment");
+const cartEmailScheduler_1 = require("./cron/cartEmailScheduler");
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const app = (0, express_1.default)();
 // Trust proxy for accurate IP detection behind reverse proxy (Nginx)
@@ -4117,6 +4118,7 @@ const port = Number(process.env.PORT || 2000);
     const host = process.env.HOST || '0.0.0.0'; // Listen on all network interfaces
     // Start cart abandonment cron job
     (0, cartAbandonment_1.startCartAbandonmentCron)(pool);
+    (0, cartEmailScheduler_1.startCartEmailSchedulerCron)(pool);
     server.listen(port, host, () => {
         console.log(`🚀 Nefol API running on http://${host}:${port}`);
         console.log(`📡 WebSocket server ready for real-time updates`);

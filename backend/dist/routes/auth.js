@@ -136,7 +136,7 @@ async function forgotPassword(pool, req, res) {
                             const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
                             await pool.query(`UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3`, [hashedToken, expiresAt, user.id]);
                             const frontendUrl = process.env.FRONTEND_URL || process.env.USER_PANEL_URL || 'https://thenefol.com';
-                            const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(userResult.rows[0].email)}`;
+                            const resetLink = `${frontendUrl}/#/user/reset-password?token=${rawToken}&email=${encodeURIComponent(userResult.rows[0].email)}`;
                             await (0, emailService_1.sendPasswordResetEmail)(userResult.rows[0].email, user.name || 'User', resetLink);
                             console.log(`✅ Password reset email sent (WhatsApp fallback)`);
                         }
@@ -168,9 +168,9 @@ async function forgotPassword(pool, req, res) {
                  reset_password_expires = $2,
                  updated_at = NOW()
              WHERE id = $3`, [hashedToken, expiresAt, user.id]);
-                    // Build reset link
+                    // Build reset link - use hash routing for frontend
                     const frontendUrl = process.env.FRONTEND_URL || process.env.USER_PANEL_URL || 'https://thenefol.com';
-                    const resetLink = `${frontendUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+                    const resetLink = `${frontendUrl}/#/user/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
                     // Send password reset email
                     await (0, emailService_1.sendPasswordResetEmail)(email, user.name || 'User', resetLink);
                     console.log(`✅ Password reset email sent to: ${email}`);

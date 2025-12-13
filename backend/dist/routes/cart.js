@@ -157,14 +157,42 @@ async function addToCart(pool, req, res) {
                 user_agent: req.headers['user-agent'],
                 ip_address: req.ip || req.connection.remoteAddress
             });
-            // Send cart reminder email (async, don't wait)
-            // Only send if this is a new item (not an update to existing)
+            // Schedule cart reminder email to be sent after 6 hours (instead of instant)
+            // Only schedule if this is a new item (not an update to existing)
             if (existingItem.rows.length === 0) {
                 const userData = await pool.query('SELECT email, name FROM users WHERE id = $1', [userId]);
                 if (userData.rows.length > 0 && userData.rows[0].email) {
-                    (0, emailService_1.sendCartAddedEmail)(userData.rows[0].email, userData.rows[0].name || 'Customer', productData.rows[0].title, parseFloat(productData.rows[0].price)).catch(err => {
-                        console.error('Failed to send cart reminder email:', err);
-                    });
+                    // Create table if it doesn't exist
+                    await pool.query(`
+            CREATE TABLE IF NOT EXISTS pending_cart_emails (
+              id SERIAL PRIMARY KEY,
+              user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+              user_email TEXT NOT NULL,
+              user_name TEXT NOT NULL,
+              product_name TEXT NOT NULL,
+              product_price NUMERIC(10,2) NOT NULL,
+              scheduled_send_at TIMESTAMPTZ NOT NULL,
+              sent BOOLEAN DEFAULT FALSE,
+              sent_at TIMESTAMPTZ,
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_pending_cart_emails_scheduled ON pending_cart_emails(scheduled_send_at, sent);
+            CREATE INDEX IF NOT EXISTS idx_pending_cart_emails_user ON pending_cart_emails(user_id);
+          `);
+                    // Schedule email to be sent after 6 hours
+                    const scheduledSendAt = new Date(Date.now() + 6 * 60 * 60 * 1000); // 6 hours from now
+                    await pool.query(`
+            INSERT INTO pending_cart_emails (user_id, user_email, user_name, product_name, product_price, scheduled_send_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+          `, [
+                        userId,
+                        userData.rows[0].email,
+                        userData.rows[0].name || 'Customer',
+                        productData.rows[0].title,
+                        parseFloat(productData.rows[0].price),
+                        scheduledSendAt
+                    ]);
+                    console.log(`📧 Cart reminder email scheduled for user ${userId} to be sent at ${scheduledSendAt.toISOString()}`);
                 }
             }
         }
@@ -324,12 +352,7 @@ async function login(pool, req, res) {
             user_agent: userAgent,
             ip_address: ipAddress
         });
-        // Send login alert email (async, do not block response)
-        if (user.email) {
-            (0, emailService_1.sendLoginAlertEmail)(user.email, ipAddress, userAgent).catch(err => {
-                console.error('Failed to send login alert email:', err);
-            });
-        }
+        // Login alert email removed as per requirements
     }
     catch (err) {
         (0, apiHelpers_1.sendError)(res, 500, 'Login failed', err);
