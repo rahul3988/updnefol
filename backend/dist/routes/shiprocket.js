@@ -108,20 +108,37 @@ async function getShiprocketConfig(pool, req, res) {
 async function getPickupLocations(pool) {
     try {
         const token = await getToken(pool);
-        if (!token)
+        if (!token) {
+            console.log('⚠️ No Shiprocket token available for fetching pickup locations');
             return null;
+        }
         const base = getBaseUrl();
         const resp = await fetch(`${base}/settings/company/pickup`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (!resp.ok)
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            console.error(`❌ Failed to fetch pickup locations: ${resp.status} ${resp.statusText}`, errorText);
             return null;
+        }
         const data = await resp.json();
-        // Shiprocket returns locations in data.data array
-        return data?.data || data || [];
+        // Shiprocket returns locations in different possible structures
+        // Try data.data first (most common), then data, then empty array
+        const locations = data?.data || data || [];
+        if (Array.isArray(locations) && locations.length > 0) {
+            console.log(`✅ Found ${locations.length} pickup location(s) via API`);
+            // Log first location for debugging
+            if (locations[0]) {
+                console.log(`   First location: ${JSON.stringify(locations[0])}`);
+            }
+        }
+        else {
+            console.log('⚠️ Pickup locations API returned empty or invalid data:', JSON.stringify(data));
+        }
+        return locations;
     }
     catch (err) {
-        console.error('Error fetching pickup locations:', err);
+        console.error('❌ Error fetching pickup locations:', err?.message || err);
         return null;
     }
 }
@@ -270,9 +287,18 @@ async function createShipment(pool, req, res) {
                 });
                 const retryData = await retryResp.json();
                 if (retryResp.ok && retryData) {
-                    // Use retry data
-                    const shipmentId = retryData?.shipment_id || retryData?.order_id || null;
-                    const awbCode = retryData?.awb_code || null;
+                    // Use retry data - extract from multiple possible structures
+                    const shipmentId = retryData?.shipment_id
+                        || retryData?.data?.shipment_id
+                        || retryData?.response?.shipment_id
+                        || retryData?.order_id
+                        || retryData?.data?.order_id
+                        || retryData?.response?.order_id
+                        || null;
+                    const awbCode = retryData?.awb_code
+                        || retryData?.data?.awb_code
+                        || retryData?.response?.awb_code
+                        || null;
                     // Check if shipment already exists
                     const existingShipment = await pool.query('SELECT id FROM shiprocket_shipments WHERE order_id = $1', [order.id]);
                     if (existingShipment.rows.length === 0) {
@@ -533,15 +559,76 @@ async function autoCreateShiprocketShipment(pool, order) {
             body: JSON.stringify(shipmentPayload)
         });
         const shipmentData = await shipmentResp.json();
+        // Log full response for debugging
+        if (!shipmentResp.ok) {
+            console.error(`❌ Shiprocket API error (${shipmentResp.status}):`, JSON.stringify(shipmentData, null, 2));
+        }
+        else {
+            console.log(`📦 Shiprocket API response:`, JSON.stringify(shipmentData, null, 2));
+        }
         if (shipmentResp.ok && shipmentData) {
-            const shipmentId = shipmentData?.shipment_id || shipmentData?.order_id || null;
-            const awbCode = shipmentData?.awb_code || null;
+            // Shiprocket API can return shipment_id in multiple possible structures:
+            // 1. shipmentData.shipment_id (direct)
+            // 2. shipmentData.data.shipment_id (nested in data)
+            // 3. shipmentData.response.shipment_id (nested in response)
+            // 4. shipmentData.order_id (alternative field name)
+            const shipmentId = shipmentData?.shipment_id
+                || shipmentData?.data?.shipment_id
+                || shipmentData?.response?.shipment_id
+                || shipmentData?.order_id
+                || shipmentData?.data?.order_id
+                || shipmentData?.response?.order_id
+                || null;
+            // Same for AWB code
+            const awbCode = shipmentData?.awb_code
+                || shipmentData?.data?.awb_code
+                || shipmentData?.response?.awb_code
+                || null;
+            // If shipment_id is not found, try to fetch it from Shiprocket using order_id
+            let finalShipmentId = shipmentId;
+            if (!finalShipmentId) {
+                console.log(`⚠️ shipment_id not found in initial response, attempting to fetch from Shiprocket using order_id...`);
+                try {
+                    // Try to fetch the order from Shiprocket to get shipment_id
+                    const fetchResp = await fetch(`${baseUrl}/orders?order_id=${encodeURIComponent(shipmentPayload.order_id)}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${shiprocketToken}`
+                        }
+                    });
+                    if (fetchResp.ok) {
+                        const fetchData = await fetchResp.json();
+                        // Try to extract shipment_id from fetched order data
+                        const fetchedShipmentId = fetchData?.data?.shipment_id
+                            || fetchData?.shipment_id
+                            || (fetchData?.data && Array.isArray(fetchData.data) && fetchData.data.length > 0 ? fetchData.data[0]?.shipment_id : null)
+                            || null;
+                        if (fetchedShipmentId) {
+                            finalShipmentId = fetchedShipmentId;
+                            console.log(`✅ Found shipment_id via order fetch: ${finalShipmentId}`);
+                        }
+                        else {
+                            console.error(`⚠️ Could not find shipment_id even after fetching order. Response:`, JSON.stringify(fetchData, null, 2));
+                        }
+                    }
+                    else {
+                        console.error(`⚠️ Failed to fetch order from Shiprocket: ${fetchResp.status}`);
+                    }
+                }
+                catch (fetchErr) {
+                    console.error(`⚠️ Error fetching order from Shiprocket:`, fetchErr.message);
+                }
+            }
+            if (!finalShipmentId) {
+                console.error(`❌ CRITICAL: shipment_id could not be obtained for order ${order.order_number}. Response structure:`, JSON.stringify(shipmentData, null, 2));
+                // Still save the record but with null shipment_id - will need manual intervention
+            }
             // Save or update in database
             if (existingCheck.rows.length === 0) {
                 await pool.query(`INSERT INTO shiprocket_shipments (order_id, shipment_id, tracking_url, status, awb_code, label_url, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`, [
                     order.id,
-                    shipmentId ? String(shipmentId) : null,
+                    finalShipmentId ? String(finalShipmentId) : null,
                     shipmentData?.tracking_url || null,
                     shipmentData?.status || 'pending',
                     awbCode,
@@ -552,7 +639,7 @@ async function autoCreateShiprocketShipment(pool, order) {
                 await pool.query(`UPDATE shiprocket_shipments 
            SET shipment_id = $1, tracking_url = $2, status = $3, awb_code = $4, label_url = $5, updated_at = NOW()
            WHERE order_id = $6`, [
-                    shipmentId ? String(shipmentId) : null,
+                    finalShipmentId ? String(finalShipmentId) : null,
                     shipmentData?.tracking_url || null,
                     shipmentData?.status || 'pending',
                     awbCode,
@@ -560,68 +647,71 @@ async function autoCreateShiprocketShipment(pool, order) {
                     order.id
                 ]);
             }
-            console.log(`✅ Shiprocket shipment created automatically for order ${order.order_number}, shipment_id: ${shipmentId}`);
-            // If AWB code is not present, try to generate it automatically
+            console.log(`✅ Shiprocket shipment created automatically for order ${order.order_number}, shipment_id: ${finalShipmentId || 'null (needs manual check)'}`);
+            // ALWAYS try to generate AWB if we have a shipment_id
             let finalAwbCode = awbCode;
-            if (!finalAwbCode && shipmentId) {
-                try {
-                    console.log(`🔄 Attempting to auto-generate AWB for shipment ${shipmentId}`);
-                    const awbResp = await fetch(`${baseUrl}/courier/assign/awb`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${shiprocketToken}`
-                        },
-                        body: JSON.stringify({
-                            shipment_id: shipmentId,
-                            courier_id: null // Let Shiprocket auto-assign courier
-                        })
-                    });
-                    const awbData = await awbResp.json();
-                    if (awbResp.ok && awbData) {
-                        finalAwbCode = awbData?.response?.awb_code || awbData?.awb_code || null;
-                        if (finalAwbCode) {
-                            console.log(`✅ AWB generated automatically: ${finalAwbCode}`);
-                            // Update database with AWB code
-                            await pool.query(`UPDATE shiprocket_shipments 
+            if (finalShipmentId) {
+                // If AWB code is not present, generate it automatically
+                if (!finalAwbCode) {
+                    try {
+                        console.log(`🔄 Attempting to auto-generate AWB for shipment ${finalShipmentId}`);
+                        const awbResp = await fetch(`${baseUrl}/courier/assign/awb`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${shiprocketToken}`
+                            },
+                            body: JSON.stringify({
+                                shipment_id: finalShipmentId,
+                                courier_id: null // Let Shiprocket auto-assign courier
+                            })
+                        });
+                        const awbData = await awbResp.json();
+                        if (awbResp.ok && awbData) {
+                            finalAwbCode = awbData?.response?.awb_code || awbData?.awb_code || null;
+                            if (finalAwbCode) {
+                                console.log(`✅ AWB generated automatically: ${finalAwbCode}`);
+                                // Update database with AWB code
+                                await pool.query(`UPDATE shiprocket_shipments 
                  SET awb_code = $1, status = 'ready_to_ship', updated_at = NOW()
                  WHERE order_id = $2`, [finalAwbCode, order.id]);
-                            // Try to generate label if AWB is available
-                            try {
-                                const labelResp = await fetch(`${baseUrl}/courier/generate/label`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${shiprocketToken}`
-                                    },
-                                    body: JSON.stringify({ shipment_id: shipmentId })
-                                });
-                                const labelData = await labelResp.json();
-                                if (labelResp.ok && labelData) {
-                                    const labelUrl = labelData?.label_url || labelData?.label_url_pdf || null;
-                                    if (labelUrl) {
-                                        await pool.query(`UPDATE shiprocket_shipments SET label_url = $1 WHERE order_id = $2`, [labelUrl, order.id]);
+                                // Try to generate label if AWB is available
+                                try {
+                                    const labelResp = await fetch(`${baseUrl}/courier/generate/label`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${shiprocketToken}`
+                                        },
+                                        body: JSON.stringify({ shipment_id: finalShipmentId })
+                                    });
+                                    const labelData = await labelResp.json();
+                                    if (labelResp.ok && labelData) {
+                                        const labelUrl = labelData?.label_url || labelData?.label_url_pdf || null;
+                                        if (labelUrl) {
+                                            await pool.query(`UPDATE shiprocket_shipments SET label_url = $1 WHERE order_id = $2`, [labelUrl, order.id]);
+                                        }
                                     }
                                 }
+                                catch (labelErr) {
+                                    console.error('⚠️ Error generating label (non-critical):', labelErr);
+                                }
                             }
-                            catch (labelErr) {
-                                console.error('⚠️ Error generating label (non-critical):', labelErr);
+                            else {
+                                console.log(`⚠️ AWB generation response received but no AWB code found`);
                             }
                         }
                         else {
-                            console.log(`⚠️ AWB generation response received but no AWB code found`);
+                            console.log(`⚠️ AWB generation failed (non-critical):`, awbData?.message || 'Unknown error');
                         }
                     }
-                    else {
-                        console.log(`⚠️ AWB generation failed (non-critical):`, awbData?.message || 'Unknown error');
+                    catch (awbErr) {
+                        console.error('⚠️ Error auto-generating AWB (non-critical):', awbErr.message);
+                        // Don't fail the whole process if AWB generation fails
                     }
                 }
-                catch (awbErr) {
-                    console.error('⚠️ Error auto-generating AWB (non-critical):', awbErr.message);
-                    // Don't fail the whole process if AWB generation fails
-                }
             }
-            return { success: true, shipmentId: shipmentId ? String(shipmentId) : undefined, awbCode: finalAwbCode || undefined };
+            return { success: true, shipmentId: finalShipmentId ? String(finalShipmentId) : undefined, awbCode: finalAwbCode || undefined };
         }
         else {
             // Handle pickup location errors with retry
@@ -645,8 +735,46 @@ async function autoCreateShiprocketShipment(pool, order) {
                 });
                 const retryData = await retryResp.json();
                 if (retryResp.ok && retryData) {
-                    const shipmentId = retryData?.shipment_id || retryData?.order_id || null;
-                    const awbCode = retryData?.awb_code || null;
+                    // Extract shipment_id from multiple possible response structures
+                    let shipmentId = retryData?.shipment_id
+                        || retryData?.data?.shipment_id
+                        || retryData?.response?.shipment_id
+                        || retryData?.order_id
+                        || retryData?.data?.order_id
+                        || retryData?.response?.order_id
+                        || null;
+                    // If shipment_id is still null after retry, try to fetch it
+                    if (!shipmentId) {
+                        console.log(`⚠️ shipment_id still null after retry, attempting to fetch from Shiprocket...`);
+                        try {
+                            const fetchResp = await fetch(`${baseUrl}/orders?order_id=${encodeURIComponent(shipmentPayload.order_id)}`, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${shiprocketToken}`
+                                }
+                            });
+                            if (fetchResp.ok) {
+                                const fetchData = await fetchResp.json();
+                                const fetchedShipmentId = fetchData?.data?.shipment_id
+                                    || fetchData?.shipment_id
+                                    || (fetchData?.data && Array.isArray(fetchData.data) && fetchData.data.length > 0 ? fetchData.data[0]?.shipment_id : null)
+                                    || null;
+                                if (fetchedShipmentId) {
+                                    shipmentId = fetchedShipmentId;
+                                    console.log(`✅ Found shipment_id via order fetch after retry: ${shipmentId}`);
+                                    // Update database with fetched shipment_id
+                                    await pool.query(`UPDATE shiprocket_shipments SET shipment_id = $1, updated_at = NOW() WHERE order_id = $2`, [String(shipmentId), order.id]);
+                                }
+                            }
+                        }
+                        catch (fetchErr) {
+                            console.error(`⚠️ Error fetching order after retry:`, fetchErr.message);
+                        }
+                    }
+                    const awbCode = retryData?.awb_code
+                        || retryData?.data?.awb_code
+                        || retryData?.response?.awb_code
+                        || null;
                     if (existingCheck.rows.length === 0) {
                         await pool.query(`INSERT INTO shiprocket_shipments (order_id, shipment_id, tracking_url, status, awb_code, label_url, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`, [
@@ -670,10 +798,10 @@ async function autoCreateShiprocketShipment(pool, order) {
                             order.id
                         ]);
                     }
-                    console.log(`✅ Shiprocket shipment created automatically (after retry) for order ${order.order_number}, shipment_id: ${shipmentId}`);
-                    // If AWB code is not present, try to generate it automatically
+                    console.log(`✅ Shiprocket shipment created automatically (after retry) for order ${order.order_number}, shipment_id: ${shipmentId || 'null (needs manual check)'}`);
+                    // ALWAYS try to generate AWB if we have a shipment_id
                     let finalAwbCode = awbCode;
-                    if (!finalAwbCode && shipmentId) {
+                    if (shipmentId && !finalAwbCode) {
                         try {
                             console.log(`🔄 Attempting to auto-generate AWB for shipment ${shipmentId}`);
                             const awbResp = await fetch(`${baseUrl}/courier/assign/awb`, {
