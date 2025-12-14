@@ -2465,8 +2465,13 @@ app.post('/api/orders', allowOrderCreation, async (req, res) => {
         discount_amount = 0, // Discount amount applied
         coins_used = 0 // Coins used for payment
          } = req.body || {};
-        if (!customer_name || !customer_email || !shipping_address || !items || !total) {
+        // Validate required fields - allow total to be 0 when coins cover full amount
+        if (!customer_name || !customer_email || !shipping_address || !items || total === undefined || total === null) {
             return (0, apiHelpers_1.sendError)(res, 400, 'Missing required fields');
+        }
+        // Validate total is a valid number (can be 0 if fully paid with coins)
+        if (typeof total !== 'number' || total < 0 || isNaN(total)) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid total amount');
         }
         // Ensure columns exist
         await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status TEXT`);

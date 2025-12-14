@@ -178,9 +178,9 @@ async function createShipment(pool, req, res) {
             order_date: new Date(order.created_at || Date.now()).toISOString().split('T')[0],
             pickup_location: pickupLocation,
             billing_customer_name: order.customer_name,
-            billing_last_name: shippingAddress.lastName || '',
-            billing_address: shippingAddress.address || '',
-            billing_address_2: shippingAddress.apartment || '',
+            billing_last_name: shippingAddress.lastName || shippingAddress.name?.split(' ').slice(1).join(' ') || '',
+            billing_address: shippingAddress.address || shippingAddress.street || '',
+            billing_address_2: shippingAddress.apartment || shippingAddress.area || '',
             billing_city: shippingAddress.city || '',
             billing_pincode: shippingAddress.zip || shippingAddress.pincode || '',
             billing_state: shippingAddress.state || '',
@@ -189,9 +189,9 @@ async function createShipment(pool, req, res) {
             billing_phone: getTenDigitPhone(shippingAddress.phone || (order.billing_address?.phone)),
             shipping_is_billing: !order.billing_address,
             shipping_customer_name: order.customer_name,
-            shipping_last_name: shippingAddress.lastName || '',
-            shipping_address: shippingAddress.address || '',
-            shipping_address_2: shippingAddress.apartment || '',
+            shipping_last_name: shippingAddress.lastName || shippingAddress.name?.split(' ').slice(1).join(' ') || '',
+            shipping_address: shippingAddress.address || shippingAddress.street || '',
+            shipping_address_2: shippingAddress.apartment || shippingAddress.area || '',
             shipping_city: shippingAddress.city || '',
             shipping_pincode: shippingAddress.zip || shippingAddress.pincode || '',
             shipping_state: shippingAddress.state || '',
@@ -399,7 +399,11 @@ async function autoCreateShiprocketShipment(pool, order) {
         const shippingAddress = typeof order.shipping_address === 'string'
             ? JSON.parse(order.shipping_address)
             : order.shipping_address || {};
-        if (!shippingAddress.address || !shippingAddress.city || !shippingAddress.zip) {
+        // Check if shipping address is complete (support both old and new field names)
+        const hasAddress = shippingAddress.address || shippingAddress.street;
+        const hasCity = shippingAddress.city;
+        const hasPincode = shippingAddress.zip || shippingAddress.pincode;
+        if (!hasAddress || !hasCity || !hasPincode) {
             console.log(`ℹ️ Skipping Shiprocket auto-creation for order ${order.order_number} - incomplete shipping address`);
             return { success: false, error: { message: 'Incomplete shipping address' } };
         }
@@ -452,9 +456,9 @@ async function autoCreateShiprocketShipment(pool, order) {
             order_date: new Date(order.created_at || Date.now()).toISOString().split('T')[0],
             pickup_location: pickupLocation,
             billing_customer_name: order.customer_name,
-            billing_last_name: shippingAddress.lastName || '',
-            billing_address: shippingAddress.address || '',
-            billing_address_2: shippingAddress.apartment || '',
+            billing_last_name: shippingAddress.lastName || shippingAddress.name?.split(' ').slice(1).join(' ') || '',
+            billing_address: shippingAddress.address || shippingAddress.street || '',
+            billing_address_2: shippingAddress.apartment || shippingAddress.area || '',
             billing_city: shippingAddress.city || '',
             billing_pincode: shippingAddress.zip || shippingAddress.pincode || '',
             billing_state: shippingAddress.state || '',
@@ -463,9 +467,9 @@ async function autoCreateShiprocketShipment(pool, order) {
             billing_phone: getTenDigitPhone(shippingAddress.phone || billingAddress.phone),
             shipping_is_billing: !billingAddress || Object.keys(billingAddress).length === 0,
             shipping_customer_name: order.customer_name,
-            shipping_last_name: shippingAddress.lastName || '',
-            shipping_address: shippingAddress.address || '',
-            shipping_address_2: shippingAddress.apartment || '',
+            shipping_last_name: shippingAddress.lastName || shippingAddress.name?.split(' ').slice(1).join(' ') || '',
+            shipping_address: shippingAddress.address || shippingAddress.street || '',
+            shipping_address_2: shippingAddress.apartment || shippingAddress.area || '',
             shipping_city: shippingAddress.city || '',
             shipping_pincode: shippingAddress.zip || shippingAddress.pincode || '',
             shipping_state: shippingAddress.state || '',
