@@ -993,7 +993,19 @@ async function sendInvoicePDFEmail(pool, order, baseUrl = 'https://thenefol.com'
         console.log(`✅ Invoice PDF email sent to: ${order.customer_email} for order: ${order.order_number}`);
     }
     catch (error) {
-        console.error('❌ Error sending invoice PDF email:', error);
+        // Log detailed error for debugging
+        const errorMessage = error?.message || String(error);
+        console.error('❌ Error sending invoice PDF email:', errorMessage);
+        // Check if it's a Puppeteer browser launch error
+        if (errorMessage.includes('Failed to launch the browser process') ||
+            errorMessage.includes('libatk-1.0.so.0') ||
+            errorMessage.includes('shared libraries')) {
+            console.error('⚠️ Puppeteer browser dependencies missing. PDF generation skipped.');
+            console.error('💡 To fix: Install required system libraries on the server:');
+            console.error('   Ubuntu/Debian: sudo apt-get install -y libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2');
+            console.error('   Or set PUPPETEER_EXECUTABLE_PATH environment variable to use system Chrome');
+        }
         // Don't throw - email failures shouldn't break order creation
+        // Order confirmation email will still be sent without PDF attachment
     }
 }

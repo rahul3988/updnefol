@@ -142,18 +142,29 @@ async function createShipment(pool, req, res) {
         const token = await getToken(pool);
         if (!token)
             return (0, apiHelpers_1.sendError)(res, 400, 'Invalid Shiprocket credentials');
-        // Get available pickup locations and use the first one
+        // Get available pickup locations and use the verified one
         const pickupLocations = await getPickupLocations(pool);
-        let pickupLocation = 'work'; // Default to 'work' based on error response, fallback to 'Primary' if needed
+        // Default to verified pickup location: "tyome" (Nefol Aesthetics Pvt. Ltd., Lucknow)
+        let pickupLocation = 'tyome'; // Verified pickup location ID from Shiprocket
         if (pickupLocations && pickupLocations.length > 0) {
-            // Use the first available pickup location's name
-            pickupLocation = pickupLocations[0].pickup_location || pickupLocations[0].id?.toString() || 'work';
-            console.log(`✅ Using pickup location: ${pickupLocation} (from ${pickupLocations.length} available locations)`);
+            // Try to find "tyome" or use first available
+            const verifiedLocation = pickupLocations.find((loc) => loc.pickup_location === 'tyome' ||
+                loc.id === 'tyome' ||
+                loc.pickup_location?.toLowerCase().includes('tyome'));
+            if (verifiedLocation) {
+                pickupLocation = verifiedLocation.pickup_location || verifiedLocation.id?.toString() || 'tyome';
+                console.log(`✅ Using verified pickup location: ${pickupLocation} (Nefol Aesthetics Pvt. Ltd., Lucknow)`);
+            }
+            else {
+                // Use the first available pickup location's name
+                pickupLocation = pickupLocations[0].pickup_location || pickupLocations[0].id?.toString() || 'tyome';
+                console.log(`✅ Using pickup location: ${pickupLocation} (from ${pickupLocations.length} available locations)`);
+            }
         }
         else {
-            // Use 'work' as default since that's what Shiprocket expects based on error response
-            pickupLocation = 'work';
-            console.log('⚠️ No pickup locations found via API, using default: work');
+            // Use verified location as default
+            pickupLocation = 'tyome';
+            console.log('⚠️ No pickup locations found via API, using verified default: tyome (Nefol Aesthetics Pvt. Ltd., Lucknow)');
         }
         // Helper function to extract 10-digit phone number for Shiprocket
         const getTenDigitPhone = (phoneValue) => {
@@ -238,12 +249,12 @@ async function createShipment(pool, req, res) {
             // If error is about pickup location, try to get the correct one from error response
             if (shipmentData?.message?.includes('Pickup location') || shipmentData?.message?.includes('pickup')) {
                 // Try to extract location from error response - check multiple possible structures
-                let correctLocation = 'work'; // Default fallback
+                let correctLocation = 'tyome'; // Default fallback to verified location
                 if (shipmentData?.data?.data?.length > 0) {
-                    correctLocation = shipmentData.data.data[0].pickup_location || shipmentData.data.data[0].id?.toString() || 'work';
+                    correctLocation = shipmentData.data.data[0].pickup_location || shipmentData.data.data[0].id?.toString() || 'tyome';
                 }
                 else if (shipmentData?.data?.length > 0) {
-                    correctLocation = shipmentData.data[0].pickup_location || shipmentData.data[0].id?.toString() || 'work';
+                    correctLocation = shipmentData.data[0].pickup_location || shipmentData.data[0].id?.toString() || 'tyome';
                 }
                 console.log(`⚠️ Pickup location error detected, retrying with: ${correctLocation}`);
                 console.log(`   Error message: ${shipmentData?.message}`);
@@ -426,13 +437,24 @@ async function autoCreateShiprocketShipment(pool, order) {
         const baseUrl = process.env.SHIPROCKET_BASE_URL || 'https://apiv2.shiprocket.in/v1/external';
         // Get available pickup locations
         const pickupLocations = await getPickupLocations(pool);
-        let pickupLocation = 'work';
+        // Default to verified pickup location: "tyome" (Nefol Aesthetics Pvt. Ltd., Lucknow)
+        let pickupLocation = 'tyome';
         if (pickupLocations && pickupLocations.length > 0) {
-            pickupLocation = pickupLocations[0].pickup_location || pickupLocations[0].id?.toString() || 'work';
-            console.log(`✅ Using pickup location: ${pickupLocation} (from ${pickupLocations.length} available locations)`);
+            // Try to find "tyome" or use first available
+            const verifiedLocation = pickupLocations.find((loc) => loc.pickup_location === 'tyome' ||
+                loc.id === 'tyome' ||
+                loc.pickup_location?.toLowerCase().includes('tyome'));
+            if (verifiedLocation) {
+                pickupLocation = verifiedLocation.pickup_location || verifiedLocation.id?.toString() || 'tyome';
+                console.log(`✅ Using verified pickup location: ${pickupLocation} (Nefol Aesthetics Pvt. Ltd., Lucknow)`);
+            }
+            else {
+                pickupLocation = pickupLocations[0].pickup_location || pickupLocations[0].id?.toString() || 'tyome';
+                console.log(`✅ Using pickup location: ${pickupLocation} (from ${pickupLocations.length} available locations)`);
+            }
         }
         else {
-            console.log('⚠️ No pickup locations found via API, using default: work');
+            console.log('⚠️ No pickup locations found via API, using verified default: tyome (Nefol Aesthetics Pvt. Ltd., Lucknow)');
         }
         // Helper function to extract 10-digit phone number
         const getTenDigitPhone = (phoneValue) => {
@@ -604,12 +626,12 @@ async function autoCreateShiprocketShipment(pool, order) {
         else {
             // Handle pickup location errors with retry
             if (shipmentData?.message?.includes('Pickup location') || shipmentData?.message?.includes('pickup')) {
-                let correctLocation = 'work';
+                let correctLocation = 'tyome'; // Default fallback to verified location
                 if (shipmentData?.data?.data?.length > 0) {
-                    correctLocation = shipmentData.data.data[0].pickup_location || shipmentData.data.data[0].id?.toString() || 'work';
+                    correctLocation = shipmentData.data.data[0].pickup_location || shipmentData.data.data[0].id?.toString() || 'tyome';
                 }
                 else if (shipmentData?.data?.length > 0) {
-                    correctLocation = shipmentData.data[0].pickup_location || shipmentData.data[0].id?.toString() || 'work';
+                    correctLocation = shipmentData.data[0].pickup_location || shipmentData.data[0].id?.toString() || 'tyome';
                 }
                 console.log(`⚠️ Pickup location error detected, retrying with: ${correctLocation}`);
                 shipmentPayload.pickup_location = correctLocation;

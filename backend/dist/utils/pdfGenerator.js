@@ -87,10 +87,18 @@ async function generateInvoicePDF(pool, order, baseUrl = 'https://thenefol.com')
         }
         // Generate invoice HTML
         const invoiceHtml = (0, amazonInvoiceTemplate_1.generateAmazonInvoiceHTML)(order, companyDetails, taxSettings, terms, signature, currency, logoUrl, signatoryPhotoUrl, shipmentInfo);
-        // Launch Puppeteer browser
+        // Launch Puppeteer browser with additional args for server environments
         browser = await puppeteer_1.default.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+                '--disable-software-rasterizer'
+            ],
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
         });
         const page = await browser.newPage();
         // Set content and wait for resources to load
