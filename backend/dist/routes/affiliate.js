@@ -161,12 +161,22 @@ async function approveAffiliateApplication(pool, req, res) {
         const verificationCode = generateVerificationCode();
         // Generate unique Affiliate Partner ID (Membership ID)
         // Format: AP + 8-digit number (e.g., AP00000001)
-        const partnerIdResult = await pool.query(`
-      SELECT COALESCE(MAX(CAST(SUBSTRING(partner_id FROM 3) AS INTEGER)), 0) + 1 as next_id
-      FROM affiliate_partners
-      WHERE partner_id IS NOT NULL AND partner_id ~ '^AP[0-9]+$'
-    `);
-        const nextPartnerId = partnerIdResult.rows[0]?.next_id || 1;
+        let nextPartnerId = 1;
+        try {
+            // Check if partner_id column exists and get max ID
+            const partnerIdResult = await pool.query(`
+        SELECT COALESCE(MAX(CAST(SUBSTRING(partner_id FROM 3) AS INTEGER)), 0) + 1 as next_id
+        FROM affiliate_partners
+        WHERE partner_id IS NOT NULL AND partner_id ~ '^AP[0-9]+$'
+      `);
+            nextPartnerId = partnerIdResult.rows[0]?.next_id || 1;
+        }
+        catch (err) {
+            // If column doesn't exist yet, start from 1
+            // This handles the case where the schema migration hasn't run
+            console.warn('⚠️ partner_id column may not exist, starting from ID 1:', err.message);
+            nextPartnerId = 1;
+        }
         const partnerId = `AP${nextPartnerId.toString().padStart(8, '0')}`;
         // Update application status
         const { rows } = await pool.query(`

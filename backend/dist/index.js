@@ -3745,6 +3745,166 @@ app.get('/api/ai/tasks', async (req, res) => {
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to fetch AI tasks', err);
     }
 });
+// --- Cart & Checkout admin endpoints for CartCheckoutManagement page ---
+// Helper to safely parse price text (e.g., "₹1,234.00") to number
+function parsePriceText(value) {
+    if (value === null || value === undefined)
+        return 0;
+    const cleaned = String(value).replace(/[^0-9.]/g, '');
+    const num = parseFloat(cleaned);
+    return Number.isFinite(num) ? num : 0;
+}
+// Admin: Get all cart items with user & product details
+app.get('/api/admin/cart/items', async (req, res) => {
+    try {
+        const { rows } = await pool.query(`
+      SELECT 
+        c.id,
+        c.user_id,
+        u.name AS user_name,
+        u.email AS user_email,
+        c.product_id,
+        p.title AS product_name,
+        p.list_image AS product_image,
+        c.quantity,
+        COALESCE(p.price, '0') AS price_text,
+        c.created_at AS added_at,
+        c.updated_at
+      FROM cart c
+      LEFT JOIN users u ON c.user_id = u.id
+      LEFT JOIN products p ON c.product_id = p.id
+      ORDER BY c.created_at DESC
+    `);
+        const items = rows.map((row) => {
+            const unitPrice = parsePriceText(row.price_text);
+            const quantity = row.quantity || 1;
+            const totalPrice = unitPrice * quantity;
+            return {
+                id: row.id,
+                user_id: row.user_id,
+                user_name: row.user_name || 'Guest',
+                user_email: row.user_email || '',
+                product_id: row.product_id,
+                product_name: row.product_name || 'Product',
+                product_image: row.product_image || '',
+                quantity,
+                price: unitPrice,
+                total_price: totalPrice,
+                added_at: row.added_at,
+                updated_at: row.updated_at,
+            };
+        });
+        (0, apiHelpers_1.sendSuccess)(res, { items });
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to fetch cart items', err);
+    }
+});
+// Admin: Update cart item quantity
+app.put('/api/admin/cart/items/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { quantity } = req.body || {};
+        const qty = Math.max(1, parseInt(quantity, 10) || 1);
+        const result = await pool.query('UPDATE cart SET quantity = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [qty, id]);
+        if (result.rowCount === 0) {
+            return (0, apiHelpers_1.sendError)(res, 404, 'Cart item not found');
+        }
+        (0, apiHelpers_1.sendSuccess)(res, result.rows[0]);
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to update cart item', err);
+    }
+});
+// Admin: Remove cart item
+app.delete('/api/admin/cart/items/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query('DELETE FROM cart WHERE id = $1', [id]);
+        if (result.rowCount === 0) {
+            return (0, apiHelpers_1.sendError)(res, 404, 'Cart item not found');
+        }
+        (0, apiHelpers_1.sendSuccess)(res, { success: true });
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to remove cart item', err);
+    }
+});
+// Map order.status to CheckoutSession status
+function mapOrderStatusToSessionStatus(status) {
+    const s = (status || '').toLowerCase();
+    if (s === 'delivered' || s === 'completed')
+        return 'completed';
+    if (s === 'cancelled' || s === 'failed')
+        return 'abandoned';
+    if (s === 'expired')
+        return 'expired';
+    return 'pending';
+}
+// Admin: Get checkout sessions (derived from orders table)
+app.get('/api/admin/checkout/sessions', async (req, res) => {
+    try {
+        const { rows } = await pool.query(`
+      SELECT
+        o.id,
+        o.user_id,
+        u.name AS user_name,
+        u.email AS user_email,
+        o.order_number,
+        o.total,
+        o.items,
+        o.status,
+        o.created_at,
+        o.updated_at,
+        o.payment_method,
+        o.shipping_address
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      ORDER BY o.created_at DESC
+    `);
+        const sessions = rows.map((row) => {
+            const itemsArray = Array.isArray(row.items) ? row.items : [];
+            const totalAmount = parsePriceText(row.total);
+            return {
+                id: row.id,
+                user_id: row.user_id,
+                user_name: row.user_name || 'Guest',
+                user_email: row.user_email || '',
+                session_id: row.order_number,
+                status: mapOrderStatusToSessionStatus(row.status),
+                total_amount: totalAmount,
+                items_count: itemsArray.length,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                payment_method: row.payment_method || '',
+                shipping_address: row.shipping_address ? JSON.stringify(row.shipping_address) : '',
+            };
+        });
+        (0, apiHelpers_1.sendSuccess)(res, { sessions });
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to fetch checkout sessions', err);
+    }
+});
+// Admin: Update checkout session status (writes back to orders.status)
+app.put('/api/admin/checkout/sessions/:id/status', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body || {};
+        if (!status) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Status is required');
+        }
+        // Write status directly to orders.status; front-end maps this back
+        const result = await pool.query('UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [status, id]);
+        if (result.rowCount === 0) {
+            return (0, apiHelpers_1.sendError)(res, 404, 'Checkout session / order not found');
+        }
+        (0, apiHelpers_1.sendSuccess)(res, result.rows[0]);
+    }
+    catch (err) {
+        (0, apiHelpers_1.sendError)(res, 500, 'Failed to update checkout session status', err);
+    }
+});
 // Tax endpoints
 app.get('/api/tax-rates', async (req, res) => {
     try {

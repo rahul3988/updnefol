@@ -525,6 +525,17 @@ async function ensureSchema(pool) {
     
     create index if not exists idx_orders_affiliate_id on orders(affiliate_id);
     
+    -- Ensure partner_id column exists in affiliate_partners table (migration)
+    do $$
+    begin
+      if not exists (
+        select 1 from information_schema.columns 
+        where table_name = 'affiliate_partners' and column_name = 'partner_id'
+      ) then
+        alter table affiliate_partners add column partner_id text unique;
+      end if;
+    end $$;
+    
     -- Marketing Tables
     -- Cashback System
     create table if not exists cashback_transactions (
