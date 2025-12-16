@@ -693,6 +693,14 @@ app.put('/api/admin/affiliate-commission-settings', (req, res) => {
 });
 app.get('/api/affiliate/commission-settings', affiliateRoutes.getAffiliateCommissionForUsers.bind(null, pool));
 app.get('/api/affiliate/marketing-materials', affiliateRoutes.getAffiliateMarketingMaterials.bind(null, pool));
+// ==================== COMMUNITY MANAGEMENT (ADMIN) ====================
+// Frontend expects these endpoints; return empty lists for now so UI works without errors
+app.get('/api/admin/community/posts', apiHelpers_1.authenticateToken, (_req, res) => {
+    (0, apiHelpers_1.sendSuccess)(res, []);
+});
+app.get('/api/admin/community/comments', apiHelpers_1.authenticateToken, (_req, res) => {
+    (0, apiHelpers_1.sendSuccess)(res, []);
+});
 // ==================== OPTIMIZED PRODUCTS API ====================
 app.get('/api/products', (req, res) => productRoutes.getProducts(pool, res));
 // Specific routes must come before generic :id route

@@ -413,8 +413,18 @@ async function getAffiliateReferrals(pool, req, res) {
         const offset = (Number(page) - 1) * Number(limit);
         // Get affiliate partner
         const affiliateResult = await pool.query('SELECT id FROM affiliate_partners WHERE user_id = $1', [userId]);
+        // If the user doesn't have an affiliate account yet, return an empty,
+        // successful response instead of a 404 so the frontend doesn't log errors
         if (affiliateResult.rows.length === 0) {
-            return (0, apiHelpers_1.sendError)(res, 404, 'Affiliate account not found');
+            return (0, apiHelpers_1.sendSuccess)(res, {
+                referrals: [],
+                pagination: {
+                    page: Number(page),
+                    limit: Number(limit),
+                    total: 0,
+                    pages: 0
+                }
+            });
         }
         const affiliateId = affiliateResult.rows[0].id;
         // Get referrals from affiliate_referrals table with order details
