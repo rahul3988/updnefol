@@ -109,6 +109,54 @@ async function ensureSchema(pool) {
       ) then
         alter table users add column reset_password_expires timestamptz;
       end if;
+      
+      -- Add email_edited and phone_edited columns to track if user has edited these fields
+      if not exists (
+        select 1 from information_schema.columns 
+        where table_name = 'users' and column_name = 'email_edited'
+      ) then
+        alter table users add column email_edited boolean default false;
+      end if;
+      
+      if not exists (
+        select 1 from information_schema.columns 
+        where table_name = 'users' and column_name = 'phone_edited'
+      ) then
+        alter table users add column phone_edited boolean default false;
+      end if;
+      
+      -- Make email nullable (remove NOT NULL constraint if exists) to allow NULL emails for WhatsApp signup
+      -- This needs to be done carefully - drop unique constraint first, then alter column, then add unique back
+      if exists (
+        select 1 from information_schema.columns 
+        where table_name = 'users' and column_name = 'email' and is_nullable = 'NO'
+      ) then
+        -- Try to drop common unique constraint names (PostgreSQL may name them differently)
+        -- Using IF EXISTS so it won't error if the constraint doesn't exist or has a different name
+        begin
+          -- Drop unique constraint if it exists (try common names)
+          alter table users drop constraint if exists users_email_key;
+          alter table users drop constraint if exists users_email_unique;
+          -- Also try dropping as index
+          drop index if exists users_email_key;
+          drop index if exists users_email_unique;
+        exception when others then
+          -- If dropping fails, continue (constraint might not exist or have different name)
+          null;
+        end;
+        
+        -- Make column nullable
+        alter table users alter column email drop not null;
+        
+        -- Re-add unique constraint (only for non-null values) using a partial unique index
+        -- This allows multiple NULL emails but ensures uniqueness for non-null values
+        if not exists (
+          select 1 from pg_indexes 
+          where tablename = 'users' and indexname = 'users_email_unique'
+        ) then
+          create unique index users_email_unique on users(email) where email is not null;
+        end if;
+      end if;
     end $$;
     
     -- Add indexes for password reset fields
