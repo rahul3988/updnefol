@@ -35,6 +35,25 @@ async function submitAffiliateApplication(pool, req, res) {
         if (!name || !email || !phone || !agreeTerms) {
             return (0, apiHelpers_1.sendError)(res, 400, 'Missing required fields');
         }
+        // Validate email format - must be a proper email (contains @) and not just a phone number
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const isValidEmail = emailRegex.test(email);
+        const isPhoneNumberAsEmail = /^\d+$/.test(email.replace(/[\s+\-()]/g, '')); // Check if email is just digits
+        if (!isValidEmail || isPhoneNumberAsEmail) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Please provide a valid email address. A valid email address is required to apply for affiliate marketing.');
+        }
+        // If user is authenticated, also check their current profile email
+        if (userId) {
+            const userResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+            if (userResult.rows.length > 0) {
+                const userEmail = userResult.rows[0].email;
+                // Check if user's profile email is valid (not just phone number)
+                const userEmailIsValid = emailRegex.test(userEmail) && !/^\d+$/.test(userEmail.replace(/[\s+\-()]/g, ''));
+                if (!userEmailIsValid) {
+                    return (0, apiHelpers_1.sendError)(res, 400, 'Please update your profile with a valid email address before applying for affiliate marketing. Your current email is not valid.');
+                }
+            }
+        }
         // Check if at least one social media handle is provided
         const hasSocialMedia = instagram?.trim() || youtube?.trim() || snapchat?.trim() || facebook?.trim();
         if (!hasSocialMedia) {

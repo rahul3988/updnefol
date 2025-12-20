@@ -630,13 +630,14 @@ async function verifyOTPSignup(pool, req, res) {
         if (existingUser.rows.length > 0) {
             return (0, apiHelpers_1.sendError)(res, 409, 'User already exists');
         }
-        // Generate placeholder email if not provided (email is required in users table)
-        // Format: phone_918081013175@thenefol.com
-        const userEmail = email || `phone_${normalizedPhone}@thenefol.com`;
+        // Use phone number as email if email not provided (email is required in users table)
+        // Store just the phone number, not phone_xxx@thenefol.com format
+        const userEmail = email || normalizedPhone;
         // Create new user (no password required for OTP signup)
+        // Set is_verified = false - user will remain unverified until both email and phone are properly updated
         const { rows: userRows } = await pool.query(`
       INSERT INTO users (name, email, phone, address, password, is_verified)
-      VALUES ($1, $2, $3, $4, $5, true)
+      VALUES ($1, $2, $3, $4, $5, false)
       RETURNING id, name, email, phone, created_at
     `, [name, userEmail, normalizedPhone, address ? JSON.stringify(address) : null, 'otp_signup_' + Date.now()]);
         console.log(`✅ OTP verified and user created: ${normalizedPhone}`);
@@ -937,10 +938,12 @@ async function getUserProfile(pool, req, res) {
 async function updateUserProfile(pool, req, res) {
     try {
         const userId = req.userId;
-        const { name, phone, address, profile_photo } = req.body;
+        const { name, email, phone, address, profile_photo } = req.body;
         const updates = {};
         if (name !== undefined)
             updates.name = name;
+        if (email !== undefined)
+            updates.email = email;
         if (phone !== undefined)
             updates.phone = phone;
         if (address !== undefined)
@@ -953,6 +956,7 @@ async function updateUserProfile(pool, req, res) {
         }
         const setClause = fields.map((field, i) => `${field} = $${i + 2}`).join(', ');
         const values = [userId, ...fields.map(field => updates[field])];
+        // Get current user data to check verification status
         const { rows } = await pool.query(`
       UPDATE users 
       SET ${setClause}, updated_at = NOW()
@@ -963,7 +967,22 @@ async function updateUserProfile(pool, req, res) {
         if (rows.length === 0) {
             return (0, apiHelpers_1.sendError)(res, 404, 'User not found');
         }
-        (0, apiHelpers_1.sendSuccess)(res, rows[0]);
+        const updatedUser = rows[0];
+        // Check if both email and phone are properly set (not placeholder values)
+        // Email should be a valid email format (contains @) and phone should be a valid phone number
+        const hasValidEmail = updatedUser.email && updatedUser.email.includes('@') && !/^\d+$/.test(updatedUser.email);
+        const hasValidPhone = updatedUser.phone && /^\d{10,15}$/.test(updatedUser.phone.replace(/[\s+\-()]/g, ''));
+        // Update is_verified status: only true if both email and phone are properly set
+        const shouldBeVerified = hasValidEmail && hasValidPhone;
+        if (updatedUser.is_verified !== shouldBeVerified) {
+            await pool.query(`
+        UPDATE users 
+        SET is_verified = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [shouldBeVerified, userId]);
+            updatedUser.is_verified = shouldBeVerified;
+        }
+        (0, apiHelpers_1.sendSuccess)(res, updatedUser);
     }
     catch (err) {
         (0, apiHelpers_1.sendError)(res, 500, 'Failed to update user profile', err);
