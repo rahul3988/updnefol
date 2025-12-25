@@ -305,16 +305,66 @@ async function uploadProductImages(pool, req, res) {
 async function getProductImages(pool, req, res) {
     try {
         const { id } = req.params;
-        // Check if display_order column exists, if not use created_at
-        const { rows } = await pool.query(`
-      SELECT * FROM product_images 
-      WHERE product_id = $1 
-      ORDER BY COALESCE(display_order, id) ASC, created_at ASC
-    `, [id]);
-        (0, apiHelpers_1.sendSuccess)(res, rows);
+        // Validate id parameter
+        if (!id || id === 'undefined' || id === 'null') {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid product ID');
+        }
+        const productId = parseInt(id, 10);
+        if (isNaN(productId)) {
+            return (0, apiHelpers_1.sendError)(res, 400, 'Invalid product ID format');
+        }
+        // Check if product exists first
+        const productCheck = await pool.query('SELECT id FROM products WHERE id = $1', [productId]);
+        if (productCheck.rows.length === 0) {
+            return (0, apiHelpers_1.sendError)(res, 404, 'Product not found');
+        }
+        // Try to query with display_order first, fallback if column doesn't exist
+        let rows;
+        try {
+            // Try query with display_order
+            const result = await pool.query(`
+        SELECT id, product_id, url, type, display_order, created_at 
+        FROM product_images 
+        WHERE product_id = $1 
+        ORDER BY COALESCE(display_order, id) ASC, created_at ASC
+      `, [productId]);
+            rows = result.rows;
+        }
+        catch (err) {
+            // If display_order column doesn't exist, try without it
+            if (err.message && err.message.includes('display_order')) {
+                console.log('⚠️ display_order column not found, using fallback query');
+                const result = await pool.query(`
+          SELECT id, product_id, url, type, created_at 
+          FROM product_images 
+          WHERE product_id = $1 
+          ORDER BY id ASC, created_at ASC
+        `, [productId]);
+                rows = result.rows;
+            }
+            else {
+                throw err;
+            }
+        }
+        // Ensure all rows have required fields
+        const formattedRows = rows.map((row) => ({
+            id: row.id,
+            product_id: row.product_id,
+            url: row.url || '',
+            type: row.type || 'pdp',
+            display_order: row.display_order || row.id,
+            created_at: row.created_at
+        }));
+        (0, apiHelpers_1.sendSuccess)(res, formattedRows);
     }
     catch (err) {
-        (0, apiHelpers_1.sendError)(res, 500, 'Failed to fetch product images', err);
+        console.error('❌ Failed to fetch product images:', err);
+        console.error('Error details:', {
+            message: err.message,
+            code: err.code,
+            productId: req.params.id
+        });
+        (0, apiHelpers_1.sendError)(res, 500, `Failed to fetch product images: ${err.message || 'Unknown error'}`, err);
     }
 }
 // Delete product image
